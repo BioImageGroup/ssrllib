@@ -1,0 +1,180 @@
+# ============================================================================ #
+# ================================ CONFIG FILE =============================== #
+# ============================================================================ #
+
+# --------------------------------------------------------------------- #
+# -------------------------------- DATA ------------------------------- #
+# --------------------------------------------------------------------- #
+
+# ___ base ___ #
+dataset_properties: &dataset_properties
+  name: ClassificationROIDataset
+  data_dir: /home/nicola/data/meso
+  type: ndpi
+  size: &size 128
+  stratified: True
+
+in_channels: &data_channels 3
+
+# ___ dataset ___ #
+dataset: &dataset
+  train:
+    <<: *dataset_properties
+    split:
+      - 0
+      - 0.1
+  val:
+    <<: *dataset_properties
+    split:
+      - 0.5
+      - 0.75
+  test:
+    <<: *dataset_properties
+    split:
+      - 0.75
+      - 1
+
+# ___ datamodule ___ #
+datamodule:
+  dataset_hparams: *dataset
+  workers:
+    train: 12
+    val: 12
+    test: 12
+  batch_sizes:
+    train: 32
+    val: 1
+    test: 1
+
+# ___ transforms ___ # (Optional)
+transforms:
+  - name: Rotate90
+    prob: 0.5
+  - name: Flip
+    prob: 0.5
+    dim: 0
+  - name: Flip
+    prob: 0.5
+    dim: 1
+  - name: ContrastAdjust
+    adj: 0.1
+  - name: AddNoise
+    sigma_max: 0.05
+
+
+# --------------------------------------------------------------------- #
+# --------------------------- OPTIMIZATION ---------------------------- #
+# --------------------------------------------------------------------- #
+
+# ___ optimizer ___ #
+optimizer: &optimizer
+  name: Adam
+  lr: 5.0e-05
+
+# ___ scheduler ___ #
+scheduler: &scheduler
+  name: ReduceLROnPlateau
+  monitor: val/Accuracy
+  patience: 15
+  factor: 0.1
+  mode: max
+
+# ___ loss ___ #
+loss: &loss
+  name: CELoss
+
+# ___ metric ___ #
+metric: &metric
+  name: Accuracy
+
+
+# --------------------------------------------------------------------- #
+# -------------------------- LIGHTNING MODEL -------------------------- #
+# --------------------------------------------------------------------- #
+# ___ resnet configs ___ #
+resnet_18: &res18_layers
+  - 2
+  - 2
+  - 2
+  - 2
+resnet_34: &res34_layers
+  - 3
+  - 4
+  - 6
+  - 3
+
+# ___ backbone ___ #
+backbone_params: &backbone
+  name: ResNet
+  block: BasicBlock
+  layers:
+    - 2
+    - 2
+    - 2
+    - 2
+  global_avg_pool: True
+
+# ___ head ___ #
+head_params: &head
+  name: LinearHead
+  in_features: 512
+  task_classes: 2
+
+# ___ model ___ #
+model:
+  name: SelfSupervisedModule
+  backbone_hparams: *backbone
+  head_hparams: *head
+  optimizer_hparams: *optimizer
+  scheduler_hparams: *scheduler
+  loss_hparams: *loss
+  metric_hparams: *metric
+  input_shape:
+    - *data_channels
+    - *size
+    - *size
+
+# ___ load pretrained ___ # (Optional)
+pretrained:
+  pretrained_model: /home/nicola/Documents/remote_pycharm_projects/ssrllib/logs/meso_pretext_jigsaw/lightning_logs/version_0/checkpoints/epoch=1-step=43.ckpt
+  drop_head: True
+  freeze_backbone: False
+
+
+# ------------------------------------------------------------- #
+# ------------------------- CALLBACKS ------------------------- #
+# ------------------------------------------------------------- #
+
+callbacks:
+  # ___ checkpoint ___ #
+  - name: ModelCheckpoint
+    save_top_k: 1
+    verbose: True
+    monitor: val/Accuracy
+    mode: max
+    every_n_epochs: 1
+  # ___ early stopping ___ #
+  - name: EarlyStopping
+    monitor: val/Accuracy
+    min_delta: 0.005
+    patience: 31
+    mode: max
+  # ___ lr monitor ___ #
+  - name: LearningRateMonitor
+
+
+# --------------------------------------------------------------------- #
+# ------------------------- RUN CONFIGURATION ------------------------- #
+# --------------------------------------------------------------------- #
+
+# ___ trainer ___ #
+
+trainer:
+  max_epochs: 100
+  gpus: 1
+  accelerator: dp
+  flush_logs_every_n_steps: 1
+  log_every_n_steps: 1
+  progress_bar_refresh_rate: 1
+
+seed: 0
