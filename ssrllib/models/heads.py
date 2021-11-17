@@ -5,18 +5,21 @@ This file contains the different heads to be attached to the HEADLESS - backbone
 import numpy as np
 from torch import nn
 from torch.nn import Linear, Sequential, Sigmoid, Tanh
+from torch.nn.modules.dropout import Dropout2d
 
 from ssrllib.models.blocks import Deconv2D, AEDecoder
 
 
 class LinearHead(nn.Module):
-    def __init__(self, in_features, task_classes):
+    def __init__(self, in_features: int = 512, task_classes: int = 2):
         super().__init__()
-
+        
         self.linear = Linear(in_features=in_features, out_features=task_classes)
 
     def forward(self, x):
-        return self.linear(x)
+        x = self.linear(x)
+
+        return x
 
 
 class AEDecoder2D(AEDecoder):

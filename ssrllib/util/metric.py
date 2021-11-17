@@ -22,7 +22,7 @@ class Accuracy(object):
         self.metric_func = tm.Accuracy().cuda()
 
     def __call__(self, preds, labels):
-        return self.metric_func(torch.argmax(self.softmax(preds), dim=-1), labels)
+        return self.metric_func(torch.argmax(preds, dim=-1), labels)
 
 
 class MSE(object):

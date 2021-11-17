@@ -48,14 +48,22 @@ class DataModule(pl.LightningDataModule):
     def prepare_data(self) -> None:
         pass
 
-    def setup(self, stage: Optional[str] = None):
+    def setup(self, stage: Optional[str] = None, test_prefix = None):
         # Load the dataset
 
         if stage == 'fit':
+            print_ts('Loading training dataset')
             self.ds_train = create_module(self.dataset_hparams['train'])
+            print_ts('Loading validation dataset')
             self.ds_val = create_module(self.dataset_hparams['val'])
+
         elif stage is None or stage == 'test':
+            print_ts('Loading test dataset')
             self.ds_test = create_module(self.dataset_hparams['test'])
+
+        elif stage == 'predict':
+            print_ts('Loading whole dataset for prediction')
+            self.ds_predict = create_module(self.dataset_hparams['pred'])
 
     def train_dataloader(self):
         return DataLoader(self.ds_train, batch_size=self.batch_sizes['train'], num_workers=self.workers['train'], shuffle=True)
@@ -65,3 +73,6 @@ class DataModule(pl.LightningDataModule):
 
     def test_dataloader(self):
         return DataLoader(self.ds_test, batch_size=self.batch_sizes['test'], num_workers=self.workers['test'])
+
+    def predict_dataloader(self):
+        return DataLoader(self.ds_predict, batch_size=self.batch_sizes['pred'], num_workers=self.workers['pred'])

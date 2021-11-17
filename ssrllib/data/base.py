@@ -1,4 +1,5 @@
 import builtins
+from collections import defaultdict
 import os
 import xml.etree.ElementTree as et
 from abc import abstractmethod
@@ -9,11 +10,13 @@ import numpy as np
 import torch
 from PIL import Image
 from openslide import OpenSlide
+from torch.functional import norm
+from torchvision.transforms.transforms import Normalize
 from ssrllib.util.augmentation import PretextRotation
 from ssrllib.util.tools import jigsaw_scramble, jigsaw_tile
 from torch.utils.data import Dataset
 from torchvision.transforms import ToTensor, RandomCrop, Compose
-
+from ssrllib.util.io import print_ts
 to_tensor = ToTensor()
 
 
@@ -172,7 +175,7 @@ class MultiFileClassificationDataset(Dataset):
 
         return np.array(classes)
 
-    def __init__(self, data_dir: str, type: str, split: Tuple[float, float], stratified: bool = False):
+    def __init__(self, data_dir: str, type: str, split: Tuple[float, float], splitting: str = 'sorted'):
         """
 
         :param data_dir: Root folder for the multi-file dataset
@@ -186,7 +189,7 @@ class MultiFileClassificationDataset(Dataset):
         self.labels = self._get_class_labels(type=self.type)
         self.images = _load_images(self.image_files, type=self.type)
         self.split = split
-        self.stratified = stratified
+        self.splitting = splitting
 
     @abstractmethod
     def __getitem__(self, item):
@@ -211,8 +214,8 @@ class MultiFileStandardClassificationDataset(MultiFileClassificationDataset):
         
         return torch.stack(tiled_images), np.array(tiled_labels)
 
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], stratified: bool = False, transforms: Compose = Compose([])):
-        super(MultiFileStandardClassificationDataset, self).__init__(data_dir, type, split, stratified)
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: Compose = Compose([])):
+        super(MultiFileStandardClassificationDataset, self).__init__(data_dir, type, split, splitting)
 
         self.images, self.labels = self._tile_images(size)
 
@@ -222,8 +225,6 @@ class MultiFileStandardClassificationDataset(MultiFileClassificationDataset):
 
     def __getitem__(self, item):
         return self.transforms(self.crop(self.images[item])), self.labels[item]
-
-
 
 
 class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
@@ -241,9 +242,10 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
         """
         tiled_images = []
         tiled_labels = []
+        patient_reference = defaultdict(lambda: [])
+        for image_idx, (image, rois, label) in enumerate(zip(self.images, self.rois, self.labels)):
 
-        for image, rois, label in zip(self.images, self.rois, self.labels):
-
+            seen_rois = 0
             for roi in rois:
 
                 # Extract bounding box from xml path coordinates
@@ -259,14 +261,26 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
 
                 tiled_images.extend(tiles)
                 tiled_labels.extend(labels)
+                
+                # create entry for image #image_idx that says that images from "seen_rois" to "seen_rois + len(tiles)"
+                # correspond to patient #image_idx
+                patient_reference[image_idx] = list(range(seen_rois, seen_rois + len(tiles)))
 
-        return torch.stack(tiled_images), np.array(tiled_labels)
+        return torch.stack(tiled_images), np.array(tiled_labels), patient_reference
 
     def split_data(self):
-        if self.stratified:
+        print_ts(f'starting class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
+        print_ts(f'Splitting -> {(self.splitting).upper()} (portion: {self.split})')
+        if self.splitting == 'stratified':
             self.split_data_stratified()
-        else:
+        elif self.splitting == 'uniform':
+            self.split_data_uniform()
+        elif self.splitting == 'sorted':
             self.split_data_sorted()
+        else:
+            NotImplementedError(f'Available splitting methods are stratified/uniform/sorted, got {self.splitting}')
+
+        print_ts(f'final class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
 
     def split_data_sorted(self):
         start = int(len(self) * self.split[0])
@@ -274,6 +288,24 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
         self.images = self.images[start:end]
         self.labels = self.labels[start:end]
 
+    def split_data_uniform(self):
+        class_dist = np.bincount(self.labels)
+        smallest_class_size = np.min(class_dist)
+
+        labels_split = []
+        images_split = []
+
+        start = int(smallest_class_size * self.split[0])
+        end = int(smallest_class_size * self.split[1])
+
+        for cls, _ in enumerate(class_dist):
+            idx_split = self.labels == cls
+            labels_split.extend(self.labels[idx_split][start:end])
+            images_split.extend(self.images[idx_split][start:end])
+
+        self.labels = labels_split
+        self.images = images_split
+       
     def split_data_stratified(self):
         class_dist = np.bincount(self.labels)
 
@@ -292,9 +324,9 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
         self.images = images_split
 
     def class_distr(self):
-        print(np.bincount(self.labels))
+        return np.bincount(self.labels)
 
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], stratified: bool = False, transforms: Compose = Compose([])):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], splitting: str = 'sorted', transforms: Compose = Compose([])):
         """
 
         :param data_dir: Root folder for the multi-file dataset
@@ -302,35 +334,37 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
         :param size: Size of the tiles to be extracted
         """
 
-        super().__init__(data_dir, type, split, stratified)
+        super().__init__(data_dir, type, split, splitting)
         self.xmls = self._get_class_files(type='xml')
         self.rois = _load_rois(self.xmls)
 
-        self.images, self.labels = self._tile_rois(size)
-        print(f'class distr {self.class_distr()}')
+        self.images, self.labels, self.patient_reference = self._tile_rois(size)
 
         self.split_data()
+        # self.crop = Compose([RandomCrop(size=size), Normalize(0, 1)])
         self.crop = Compose([RandomCrop(size=size)])
         self.transforms = transforms
 
     def __getitem__(self, item):
         return self.transforms(self.crop(self.images[item])), self.labels[item]
 
+    def get_patient_reference(self):
+        return self.patient_reference
 
 class ClassificationROIDataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), stratified: bool = False):
-        super(ClassificationROIDataset, self).__init__(data_dir, type, size, split, stratified, transforms)
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted'):
+        super(ClassificationROIDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
 
 
 class ClassificationDataset(MultiFileStandardClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), stratified: bool = False):
-        super(ClassificationDataset, self).__init__(data_dir, type, size, split, stratified, transforms)
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted'):
+        super(ClassificationDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
 
 
 class RotationDataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]),
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted',
                  base_angle: int = 90, multiples: int = 4):
-        super(RotationDataset, self).__init__(data_dir, type, size, split, transforms)
+        super(RotationDataset, self).__init__(data_dir, type, size, split, splitting,transforms)
 
         self.rotation = PretextRotation(base_angle, multiples)
 
@@ -342,8 +376,8 @@ class RotationDataset(MultiFileROIClassificationDataset):
 
 
 class AutoencodingROIDataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), stratified: bool = False):
-        super(AutoencodingROIDataset, self).__init__(data_dir, type, size, split, stratified, transforms)
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted'):
+        super(AutoencodingROIDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
 
     def __getitem__(self, item):
         image = self.crop(self.transforms(self.images[item]))
@@ -352,8 +386,8 @@ class AutoencodingROIDataset(MultiFileROIClassificationDataset):
 
 
 class JigsawROIDataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], permutations: str, transforms: Compose = Compose([]), stratified: bool = False):
-        super(JigsawROIDataset, self).__init__(data_dir, type, size, split, stratified, transforms)
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], permutations: str, transforms: Compose = Compose([]), splitting: str = 'sorted'):
+        super(JigsawROIDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
 
         self.permutations = np.load(permutations)
 

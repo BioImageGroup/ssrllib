@@ -32,7 +32,6 @@ if __name__ == '__main__':
         params = yaml.load(file, Loader=yaml.FullLoader)
     params_to_save = copy.deepcopy(params)
 
-
     # ---------- DATA LOADING ---------- #
     # Seed all random processes
     print_ts(f"Seeding all stochastic processes with seed {params['seed']}")
@@ -84,7 +83,18 @@ if __name__ == '__main__':
 
     # ---------- TEST ---------- #
     print_ts('Validating the network')
-    # load the best network (on validation metric) and then run a test loop
+    # load the best network (on validation metric) and then run a test loop 
+    print(f'Loading the best model at {trainer.checkpoint_callback.best_model_path}: {trainer.checkpoint_callback.best_model_score}')
     net.load_state_dict(torch.load(trainer.checkpoint_callback.best_model_path)['state_dict'])
-    dm.setup(stage="test")
+    # dm.setup(stage="test", test_prefix='test/')
+    net.set_test_log_prefix('best')
     trainer.test(net, datamodule=dm)
+
+    try:
+        net.load_state_dict(torch.load(trainer.checkpoint_callback.last_model_path)['state_dict'])
+        print(f'Loading the last model at {trainer.checkpoint_callback.last_model_path}')
+        dm.setup(stage="test", test_prefix='test/')
+        net.set_test_log_prefix('last')
+        trainer.test(net, datamodule=dm)
+    except:
+        pass

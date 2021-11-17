@@ -1,9 +1,12 @@
+from typing import Any
 import pytorch_lightning as pl
 import torch
 
 import ssrllib.util.common
+from ssrllib.util.io import print_ts
 from ssrllib.util.tools import jigsaw_tile, jigsaw_scramble
 import numpy as np
+
 
 class SelfSupervisedModule(pl.LightningModule):
     def __init__(self, backbone_hparams, head_hparams, optimizer_hparams, loss_hparams, scheduler_hparams,
@@ -92,7 +95,7 @@ class SelfSupervisedModule(pl.LightningModule):
         optimizer_dict['lr_scheduler'] = scheduler
 
         return optimizer_dict
-
+    
     def training_step(self, batch, batch_idx):
         # "batch" is the output of the training data loader.
         imgs, labels = batch
@@ -112,9 +115,13 @@ class SelfSupervisedModule(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         imgs, labels = batch
+        # print(f'labels: {labels}')
         preds = self(imgs)
+        # print(f'preds: {torch.argmax(preds, dim=1)}')
+
         loss = self.loss_module(preds, labels)
         metric = self.metric(preds, labels)
+        # print(f'preds: {torch.bincount(torch.argmax(preds, dim=1))}')
         # By default logs it per epoch (weighted average over batches)
         self.log(f"val/{self.metric_name}", metric, prog_bar=True)
         self.log(f"val/loss", loss)
@@ -124,19 +131,30 @@ class SelfSupervisedModule(pl.LightningModule):
                 self._log_result(preds.detach().cpu().numpy(), prefix='val/preds')
                 self._log_result(labels.detach().cpu().numpy(), prefix='val/labels')
 
+
     def test_step(self, batch, batch_idx):
         imgs, labels = batch
         preds = self(imgs)
+        # print_ts(f'Predictions for test volume: {torch.argmax(preds, dim=1)}')
+        # print_ts(f'Labels for test volume     : {labels}')
         loss = self.loss_module(preds, labels)
         metric = self.metric(preds, labels)
         # By default logs it per epoch (weighted average over batches), and returns it afterwards
-        self.log(f"test/{self.metric_name}", metric, prog_bar=True)
-        self.log(f"test/loss", loss)
+        self.log(f"test/{self.test_log_prefix}/{self.metric_name}", metric, prog_bar=True)
+        self.log(f"test/{self.test_log_prefix}/loss", loss)
 
         if batch_idx == 0:
             if labels.ndim > 2:
                 self._log_result(preds.detach().cpu().numpy(), prefix='test/preds')
                 self._log_result(labels.detach().cpu().numpy(), prefix='test/labels')
+
+
+    def predict_step(self, batch, batch_idx):
+        imgs, labels = batch
+        preds = self.backbone(imgs)
+
+        return preds, labels
+        
 
     def _log_result(self, preds, prefix='train'):
         # get the tensorboard summary writer
@@ -159,6 +177,9 @@ class SelfSupervisedModule(pl.LightningModule):
             for name, param in self.named_parameters():
                 if not name.startswith('head'):
                     param.requires_grad = False
+
+    def set_test_log_prefix(self, prefix: str):
+        self.test_log_prefix = prefix
 
 
 class GANModule(pl.LightningModule):
