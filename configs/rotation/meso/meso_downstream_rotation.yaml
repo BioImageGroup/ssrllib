@@ -22,7 +22,7 @@ dataset: &dataset
     <<: *dataset_properties
     split:
       - 0
-      - 0.05
+      - 0.1
   val:
     <<: *dataset_properties
     split:
@@ -69,7 +69,7 @@ datamodule:
 # ___ optimizer ___ #
 optimizer: &optimizer
   name: Adam
-  lr: 1.0e-04
+  lr: 1.0e-05
 
 # ___ scheduler ___ #
 scheduler: &scheduler

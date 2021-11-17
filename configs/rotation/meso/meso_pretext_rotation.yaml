@@ -25,16 +25,19 @@ dataset: &dataset
     split:
       - 0
       - 0.6
+    splitting: stratified
   val:
     <<: *dataset_properties
     split:
       - 0.6
-      - 0.75
+      - 0.8
+    splitting: stratified
   test:
     <<: *dataset_properties
     split:
-      - 0.75
+      - 0.8
       - 1
+    splitting: stratified
 
 
 # ___ datamodule ___ #
@@ -46,8 +49,8 @@ datamodule:
     test: 12
   batch_sizes:
     train: 32
-    val: 1
-    test: 1
+    val: 32
+    test: 32
 
 # ___ transforms ___ # (Optional)
 #transforms:
@@ -64,8 +67,7 @@ datamodule:
 # ___ optimizer ___ #
 optimizer: &optimizer
   name: Adam
-  lr: 0.001
-  weight_decay: 0.0001
+  lr: 1.0e-5
 
 # ___ scheduler ___ #
 scheduler: &scheduler

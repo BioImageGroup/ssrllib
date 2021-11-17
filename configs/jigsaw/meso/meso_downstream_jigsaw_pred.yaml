@@ -12,7 +12,6 @@ dataset_properties: &dataset_properties
   data_dir: /home/nicola/data/meso
   type: ndpi
   size: &size 128
-  stratified: True
 
 in_channels: &data_channels 3
 
@@ -22,17 +21,26 @@ dataset: &dataset
     <<: *dataset_properties
     split:
       - 0
-      - 0.1
+      - 0.12
+    splitting: stratified
   val:
     <<: *dataset_properties
     split:
-      - 0.5
-      - 0.75
+      - 0.6
+      - 0.8
+    splitting: stratified
   test:
     <<: *dataset_properties
     split:
-      - 0.75
+      - 0.8
       - 1
+    splitting: stratified
+  pred:
+    <<: *dataset_properties
+    split:
+      - 0
+      - 1
+    splitting: stratified
 
 # ___ datamodule ___ #
 datamodule:
@@ -41,25 +49,27 @@ datamodule:
     train: 12
     val: 12
     test: 12
+    pred: 12
   batch_sizes:
     train: 32
-    val: 1
-    test: 1
+    val: 32
+    test: 32
+    pred: 1
 
 # ___ transforms ___ # (Optional)
-transforms:
-  - name: Rotate90
-    prob: 0.5
-  - name: Flip
-    prob: 0.5
-    dim: 0
-  - name: Flip
-    prob: 0.5
-    dim: 1
-  - name: ContrastAdjust
-    adj: 0.1
-  - name: AddNoise
-    sigma_max: 0.05
+# transforms:
+#   - name: Rotate90
+#     prob: 0.5
+#   - name: Flip
+#     prob: 0.5
+#     dim: 0
+#   - name: Flip
+#     prob: 0.5
+#     dim: 1
+#   - name: ContrastAdjust
+#     adj: 0.1
+#   - name: AddNoise
+#     sigma_max: 0.1
 
 
 # --------------------------------------------------------------------- #
@@ -75,9 +85,13 @@ optimizer: &optimizer
 scheduler: &scheduler
   name: ReduceLROnPlateau
   monitor: val/Accuracy
-  patience: 15
-  factor: 0.1
+  patience: 5
+  factor: 0.5
   mode: max
+
+# scheduler: &scheduler
+#   name:  ExponentialLR
+#   gamma: 0.9
 
 # ___ loss ___ #
 loss: &loss
@@ -97,7 +111,6 @@ resnet_18: &res18_layers
   - 2
   - 2
   - 2
-  
 resnet_34: &res34_layers
   - 3
   - 4
@@ -136,32 +149,10 @@ model:
     - *size
 
 # ___ load pretrained ___ # (Optional)
-# pretrained:
-#   pretrained_model: /home/nicola/Documents/remote_pycharm_projects/ssrllib/logs/classification_baseline/lightning_logs/low_lr/checkpoints/epoch=36-step=702.ckpt
-#   drop_head: True
-#   freeze_backbone: False
-
-
-# ------------------------------------------------------------- #
-# ------------------------- CALLBACKS ------------------------- #
-# ------------------------------------------------------------- #
-
-callbacks:
-  # ___ checkpoint ___ #
-  - name: ModelCheckpoint
-    save_top_k: 1
-    verbose: False
-    monitor: val/Accuracy
-    mode: max
-    every_n_epochs: 1
-  # ___ early stopping ___ #
-  - name: EarlyStopping
-    monitor: val/Accuracy
-    min_delta: 0.005
-    patience: 31
-    mode: max
-  # ___ lr monitor ___ #
-  - name: LearningRateMonitor
+pretrained:
+  pretrained_model: /home/nicola/Documents/remote_pycharm_projects/ssrllib/logs/meso_pretext_jigsaw/lightning_logs/version_0/checkpoints/epoch=13-step=307.ckpt
+  drop_head: True
+  freeze_backbone: True
 
 
 # --------------------------------------------------------------------- #
@@ -173,9 +164,36 @@ callbacks:
 trainer:
   max_epochs: 100
   gpus: 1
-  accelerator: dp
+  accelerator: gpu
   flush_logs_every_n_steps: 1
   log_every_n_steps: 1
   progress_bar_refresh_rate: 1
 
+
+# --------------------------------------------------------------------- #
+# ------------------------- PREDICTION CONFIG ------------------------- #
+# --------------------------------------------------------------------- #
+
+pred:
+  test_size: 0.4
+  train_size: 0.1 # 60% of data (we consider this full supervision)
+
+param_grid:
+  classifier__kernel: 
+    - rbf
+    - linear
+  classifier__C:
+    - 1
+    - 10
+    - 100
+    - 1000
+  downsampler__sampling_strategy:
+    - majority
+    - auto
+  downsampler__n_neighbors:
+    - 1
+    - 2 
+    - 3
+
 seed: 0
+

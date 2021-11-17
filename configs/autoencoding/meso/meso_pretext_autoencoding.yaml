@@ -13,7 +13,6 @@ dataset_properties: &dataset_properties
   data_dir: /home/nicola/data/meso
   type: ndpi
   size: &size 128
-  stratified: True
 
 in_channels: &data_channels 3
 
@@ -24,16 +23,19 @@ dataset: &dataset
     split:
       - 0
       - 0.6
+    splitting: stratified
   val:
     <<: *dataset_properties
     split:
       - 0.6
-      - 0.75
+      - 0.8
+    splitting: stratified
   test:
     <<: *dataset_properties
     split:
-      - 0.75
+      - 0.8
       - 1
+    splitting: stratified
 
 
 # ___ datamodule ___ #
@@ -45,8 +47,8 @@ datamodule:
     test: 12
   batch_sizes:
     train: 32
-    val: 1
-    test: 1
+    val: 32
+    test: 32
 
 # ___ transforms ___ # (Optional)
 #transforms:
@@ -64,7 +66,6 @@ datamodule:
 optimizer: &optimizer
   name: Adam
   lr: 0.001
-  weight_decay: 0.0001
 
 # ___ scheduler ___ #
 scheduler: &scheduler

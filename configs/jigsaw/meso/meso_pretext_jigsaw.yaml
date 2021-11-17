@@ -13,7 +13,6 @@ dataset_properties: &dataset_properties
   data_dir: /home/nicola/data/meso
   type: ndpi
   size: &size 128
-  stratified: True
   permutations: /home/nicola/data/permutations/25_perms_9_tiles.npy
 
 in_channels: &data_channels 3
@@ -25,16 +24,19 @@ dataset: &dataset
     split:
       - 0
       - 0.6
+    splitting: stratified
   val:
     <<: *dataset_properties
     split:
       - 0.6
-      - 0.75
+      - 0.8
+    splitting: stratified
   test:
     <<: *dataset_properties
     split:
-      - 0.75
+      - 0.8
       - 1
+    splitting: stratified
 
 
 # ___ datamodule ___ #
@@ -46,8 +48,8 @@ datamodule:
     test: 12
   batch_sizes:
     train: 32
-    val: 1
-    test: 1
+    val: 32
+    test: 32
 
 # ___ transforms ___ # (Optional)
 #transforms:
@@ -64,14 +66,13 @@ datamodule:
 # ___ optimizer ___ #
 optimizer: &optimizer
   name: Adam
-  lr: 0.001
-  weight_decay: 0.0001
+  lr: 1.0e-5
 
 # ___ scheduler ___ #
 scheduler: &scheduler
   name: ReduceLROnPlateau
   monitor: val/Accuracy
-  patience: 5
+  patience: 10
   factor: 0.5
   mode: max # in max mode it will be reduced when the quantity monitored has stopped increasing. 
 
@@ -156,7 +157,7 @@ callbacks:
   - name: EarlyStopping
     monitor: val/Accuracy
     min_delta: 0.0001
-    patience: 11
+    patience: 21
     mode: max # in 'max' mode it will stop when the quantity monitored has stopped increasing.
   # ___ lr monitor ___ #
   - name: LearningRateMonitor
