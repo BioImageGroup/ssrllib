@@ -15,6 +15,41 @@ from ssrllib.util.common import create_module
 from ssrllib.util.io import print_ts
 from torchvision.transforms import Compose
 
+"""
+    This is a script that illustrates training a 2D U-Net
+"""
+from re import A
+import numpy as np
+import argparse
+import copy
+import os
+from multiprocessing import freeze_support
+
+import pytorch_lightning as pl
+import torch
+import yaml
+from pytorch_lightning.utilities.seed import seed_everything
+from ssrllib.data.datamodule import DataModule
+from ssrllib.util.common import create_module
+from ssrllib.util.io import print_ts
+from torchvision.transforms import Compose
+
+from sklearn.decomposition import PCA
+from sklearn.neighbors import KNeighborsClassifier
+from imblearn.under_sampling import EditedNearestNeighbours
+from imblearn.over_sampling import SMOTE
+
+from sklearn.datasets import load_digits
+from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import Pipeline
+from sklearn.decomposition import PCA, NMF
+from sklearn.feature_selection import SelectKBest, chi2
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from imblearn.pipeline import make_pipeline, Pipeline
+from sklearn.metrics import classification_report
+
 if __name__ == '__main__':
     freeze_support()
 
@@ -44,7 +79,7 @@ if __name__ == '__main__':
         for t in params['transforms']:
             transforms.append(create_module(t))
 
-    params['datamodule']['dataset_hparams']['train']['transforms'] = Compose(transforms)
+    # params['datamodule']['dataset_hparams']['train']['transforms'] = Compose(transforms)
     dm = DataModule(**params['datamodule'])
 
 
@@ -56,16 +91,7 @@ if __name__ == '__main__':
     if 'pretrained' in params:
         net.load_from_pretext(**params['pretrained'])
 
-
-    # ---------- CALLBACKS ---------- #
-    callbacks = []
-    if 'callbacks' in params:
-        for callback_params in params['callbacks']:
-            callbacks.append(create_module(callback_params))
-        params['trainer']['callbacks'] = callbacks
-
-
-    # ---------- FIT ---------- #
+    # ---------- FEATURE EXTRACTION ---------- #
     # add root dir with the same name as the config file
     params['trainer']['default_root_dir'] = os.path.join('logs', config_name)
     trainer = pl.Trainer(**params['trainer'])
@@ -77,24 +103,6 @@ if __name__ == '__main__':
     with open(os.path.join(trainer.log_dir, 'config.yaml'), 'w') as f_out:
         yaml.dump(params_to_save, f_out)
 
-    # start the actual training
-    trainer.fit(net, datamodule=dm)
-
-
-    # ---------- TEST ---------- #
-    print_ts('Validating the network')
-    # load the best network (on validation metric) and then run a test loop 
-    print(f'Loading the best model at {trainer.checkpoint_callback.best_model_path}: {trainer.checkpoint_callback.best_model_score}')
-    net.load_state_dict(torch.load(trainer.checkpoint_callback.best_model_path)['state_dict'])
-    dm.setup(stage="test", test_prefix='test/')
+    # use the pretrained network to perform feature extraction
     net.set_test_log_prefix('best')
-    trainer.test(net, datamodule=dm)
-
-    try:
-        net.load_state_dict(torch.load(trainer.checkpoint_callback.last_model_path)['state_dict'])
-        print(f'Loading the last model at {trainer.checkpoint_callback.last_model_path}')
-        dm.setup(stage="test", test_prefix='test/')
-        net.set_test_log_prefix('last')
-        trainer.test(net, datamodule=dm)
-    except:
-        pass
+    out = trainer.test(net, datamodule=dm)

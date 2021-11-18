@@ -9,7 +9,7 @@
 
 # ___ base ___ #
 dataset_properties: &dataset_properties
-  name: RotationDataset
+  name: RotationROIDataset
   data_dir: /home/nicola/data/meso
   type: ndpi
   size: &size 128

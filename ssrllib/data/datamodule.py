@@ -58,6 +58,11 @@ class DataModule(pl.LightningDataModule):
             self.ds_val = create_module(self.dataset_hparams['val'])
 
         elif stage is None or stage == 'test':
+            try:
+                del self.ds_train
+                del self.ds_val
+            except:
+                pass
             print_ts('Loading test dataset')
             self.ds_test = create_module(self.dataset_hparams['test'])
 

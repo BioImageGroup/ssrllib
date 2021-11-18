@@ -33,13 +33,15 @@ def _load_images(images: List[str], type: str) -> List:
 
     for image in images:
         if type == 'ndpi':
-            slides.append(OpenSlide(image))
+            slide = OpenSlide(image)
         elif type == 'svs':
             slide = OpenSlide(image)
-
-            slides.append(OpenSlide(image))
+        elif type == 'png':
+            slide = np.array(Image.open(image))
         else:
             NotImplementedError(f'The required format {type} is not implemented yet')
+
+        slides.append(slide)
 
     return slides
 
@@ -146,6 +148,61 @@ class MultiFileClassificationDataset(Dataset):
 
     """
 
+    def _split_data(self):
+        print_ts(f'starting class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
+        print_ts(f'Splitting -> {(self.splitting).upper()} (portion: {self.split})')
+        if self.splitting == 'stratified':
+            self._split_data_stratified()
+        elif self.splitting == 'uniform':
+            self._split_data_uniform()
+        elif self.splitting == 'sorted':
+            self._split_data_sorted()
+        else:
+            NotImplementedError(f'Available splitting methods are stratified/uniform/sorted, got {self.splitting}')
+
+        print_ts(f'final class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
+
+    def _split_data_sorted(self):
+        start = int(len(self) * self.split[0])
+        end = int(len(self) * self.split[1])
+        self.images = self.images[start:end]
+        self.labels = self.labels[start:end]
+
+    def _split_data_uniform(self):
+        class_dist = np.bincount(self.labels)
+        smallest_class_size = np.min(class_dist)
+
+        labels_split = []
+        images_split = []
+
+        start = int(smallest_class_size * self.split[0])
+        end = int(smallest_class_size * self.split[1])
+
+        for cls, _ in enumerate(class_dist):
+            idx_split = self.labels == cls
+            labels_split.extend(self.labels[idx_split][start:end])
+            images_split.extend(self.images[idx_split][start:end])
+
+        self.labels = labels_split
+        self.images = images_split
+       
+    def _split_data_stratified(self):
+        class_dist = np.bincount(self.labels)
+
+        labels_split = []
+        images_split = []
+
+        for cls, size in enumerate(class_dist):
+            start = int(size * self.split[0])
+            end = int(size * self.split[1])
+
+            idx_split = self.labels == cls
+            labels_split.extend(self.labels[idx_split][start:end])
+            images_split.extend(self.images[idx_split][start:end])
+
+        self.labels = labels_split
+        self.images = images_split
+
     def _get_class_files(self, type: str = 'ndpi') -> List[str]:
         """
         Gathers all files of a given type from the filesystem, for each available class. Files are sorted alphanumerially
@@ -188,6 +245,7 @@ class MultiFileClassificationDataset(Dataset):
         self.image_files = self._get_class_files(type=self.type)
         self.labels = self._get_class_labels(type=self.type)
         self.images = _load_images(self.image_files, type=self.type)
+        print(f'images: {len(self.images)}')
         self.split = split
         self.splitting = splitting
 
@@ -206,7 +264,7 @@ class MultiFileStandardClassificationDataset(MultiFileClassificationDataset):
         tiled_labels = []
         
         for image, label in zip(self.images, self.labels):
-            tiles = _tile_image(image, size)
+            tiles = _tile_image(np.array(image), size)
             labels = [label, ] * len(tiles)
 
             tiled_images.extend(tiles)
@@ -219,7 +277,7 @@ class MultiFileStandardClassificationDataset(MultiFileClassificationDataset):
 
         self.images, self.labels = self._tile_images(size)
 
-        self.split_data()
+        self._split_data()
         self.crop = Compose([RandomCrop(size=size)])
         self.transforms = transforms
 
@@ -268,61 +326,6 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
 
         return torch.stack(tiled_images), np.array(tiled_labels), patient_reference
 
-    def split_data(self):
-        print_ts(f'starting class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
-        print_ts(f'Splitting -> {(self.splitting).upper()} (portion: {self.split})')
-        if self.splitting == 'stratified':
-            self.split_data_stratified()
-        elif self.splitting == 'uniform':
-            self.split_data_uniform()
-        elif self.splitting == 'sorted':
-            self.split_data_sorted()
-        else:
-            NotImplementedError(f'Available splitting methods are stratified/uniform/sorted, got {self.splitting}')
-
-        print_ts(f'final class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
-
-    def split_data_sorted(self):
-        start = int(len(self) * self.split[0])
-        end = int(len(self) * self.split[1])
-        self.images = self.images[start:end]
-        self.labels = self.labels[start:end]
-
-    def split_data_uniform(self):
-        class_dist = np.bincount(self.labels)
-        smallest_class_size = np.min(class_dist)
-
-        labels_split = []
-        images_split = []
-
-        start = int(smallest_class_size * self.split[0])
-        end = int(smallest_class_size * self.split[1])
-
-        for cls, _ in enumerate(class_dist):
-            idx_split = self.labels == cls
-            labels_split.extend(self.labels[idx_split][start:end])
-            images_split.extend(self.images[idx_split][start:end])
-
-        self.labels = labels_split
-        self.images = images_split
-       
-    def split_data_stratified(self):
-        class_dist = np.bincount(self.labels)
-
-        labels_split = []
-        images_split = []
-
-        for cls, size in enumerate(class_dist):
-            start = int(size * self.split[0])
-            end = int(size * self.split[1])
-
-            idx_split = self.labels == cls
-            labels_split.extend(self.labels[idx_split][start:end])
-            images_split.extend(self.images[idx_split][start:end])
-
-        self.labels = labels_split
-        self.images = images_split
-
     def class_distr(self):
         return np.bincount(self.labels)
 
@@ -340,7 +343,7 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
 
         self.images, self.labels, self.patient_reference = self._tile_rois(size)
 
-        self.split_data()
+        self._split_data()
         # self.crop = Compose([RandomCrop(size=size), Normalize(0, 1)])
         self.crop = Compose([RandomCrop(size=size)])
         self.transforms = transforms
@@ -350,6 +353,7 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
 
     def get_patient_reference(self):
         return self.patient_reference
+
 
 class ClassificationROIDataset(MultiFileROIClassificationDataset):
     def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted'):
@@ -361,7 +365,21 @@ class ClassificationDataset(MultiFileStandardClassificationDataset):
         super(ClassificationDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
 
 
-class RotationDataset(MultiFileROIClassificationDataset):
+class RotationROIDataset(MultiFileROIClassificationDataset):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted',
+                 base_angle: int = 90, multiples: int = 4):
+        super(RotationDataset, self).__init__(data_dir, type, size, split, splitting,transforms)
+
+        self.rotation = PretextRotation(base_angle, multiples)
+
+    def __getitem__(self, item):
+        image = self.crop(self.transforms(self.images[item]))
+        image, label = self.rotation(image)
+
+        return image, label
+
+
+class RotationDataset(MultiFileStandardClassificationDataset):
     def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted',
                  base_angle: int = 90, multiples: int = 4):
         super(RotationDataset, self).__init__(data_dir, type, size, split, splitting,transforms)
@@ -385,9 +403,32 @@ class AutoencodingROIDataset(MultiFileROIClassificationDataset):
         return image, image
 
 
+class AutoencodingDataset(MultiFileStandardClassificationDataset):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted'):
+        super(AutoencodingDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
+
+    def __getitem__(self, item):
+        image = self.crop(self.transforms(self.images[item]))
+
+        return image, image
+
+
 class JigsawROIDataset(MultiFileROIClassificationDataset):
     def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], permutations: str, transforms: Compose = Compose([]), splitting: str = 'sorted'):
         super(JigsawROIDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
+
+        self.permutations = np.load(permutations)
+
+    def __getitem__(self, item):
+        image = self.crop(self.transforms(self.images[item]))
+        image = jigsaw_tile(image)
+        image, label = jigsaw_scramble(image, self.permutations)
+        return image, label
+
+
+class JigsawDataset(MultiFileStandardClassificationDataset):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], permutations: str, transforms: Compose = Compose([]), splitting: str = 'sorted'):
+        super(JigsawDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
 
         self.permutations = np.load(permutations)
 

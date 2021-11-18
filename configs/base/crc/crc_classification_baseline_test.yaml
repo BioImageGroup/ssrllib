@@ -138,10 +138,10 @@ model:
     - *size
 
 # ___ load pretrained ___ # (Optional)
-# pretrained:
-#   pretrained_model: /home/nicola/Documents/remote_pycharm_projects/ssrllib/logs/classification_baseline/lightning_logs/low_lr/checkpoints/epoch=36-step=702.ckpt
-#   drop_head: True
-#   freeze_backbone: False
+pretrained:
+  pretrained_model: /home/nicola/Documents/remote_pycharm_projects/ssrllib/logs/crc_classification_baseline/lightning_logs/version_12/checkpoints/epoch=55-step=11199.ckpt
+  drop_head: False
+  freeze_backbone: False
 
 
 # ------------------------------------------------------------- #
