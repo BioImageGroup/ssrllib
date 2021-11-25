@@ -323,7 +323,7 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
                 tiled_images.extend(tiles)
                 tiled_labels.extend(labels)
                 slides_reference.extend(slides_ref)
-                rois_reference.extend(roi_idx)
+                rois_reference.extend(rois_ref)
                 
                 # create entry for image #image_idx that says that images from "seen_rois" to "seen_rois + len(tiles)"
                 # correspond to patient #image_idx
