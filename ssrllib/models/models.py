@@ -163,7 +163,10 @@ class SelfSupervisedModule(pl.LightningModule):
 
     def load_from_pretext(self, pretrained_model, drop_head, freeze_backbone):
         # Laod state dict from filesystem
-        state_dict = torch.load(pretrained_model)['state_dict']
+        try:
+            state_dict = torch.load(pretrained_model)['state_dict']
+        except KeyError:
+            state_dict = torch.load(pretrained_model)
 
         # Drop head parameters from state dict
         if drop_head:
