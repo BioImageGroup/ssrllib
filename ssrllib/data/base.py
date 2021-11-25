@@ -300,11 +300,12 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
         """
         tiled_images = []
         tiled_labels = []
-        patient_reference = defaultdict(lambda: [])
+        slides_reference = []
+        rois_reference = []
+
         for image_idx, (image, rois, label) in enumerate(zip(self.images, self.rois, self.labels)):
 
-            seen_rois = 0
-            for roi in rois:
+            for roi_idx, roi in enumerate(rois):
 
                 # Extract bounding box from xml path coordinates
                 bbox = _get_bbox_from_path(roi)
@@ -316,15 +317,18 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
                 crop = _extract_bbox_from_image(image, bbox)
                 tiles = _tile_image(crop, size)
                 labels = [label, ] * len(tiles)
+                slides_ref = [image_idx, ] * len(tiles) 
+                rois_ref = [roi_idx, ] * len(tiles) 
 
                 tiled_images.extend(tiles)
                 tiled_labels.extend(labels)
+                slides_reference.extend(slides_ref)
+                rois_reference.extend(roi_idx)
                 
                 # create entry for image #image_idx that says that images from "seen_rois" to "seen_rois + len(tiles)"
                 # correspond to patient #image_idx
-                patient_reference[image_idx] = list(range(seen_rois, seen_rois + len(tiles)))
 
-        return torch.stack(tiled_images), np.array(tiled_labels), patient_reference
+        return torch.stack(tiled_images), np.array(tiled_labels), (slides_reference, rois_reference)
 
     def class_distr(self):
         return np.bincount(self.labels)
