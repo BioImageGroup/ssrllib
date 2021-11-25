@@ -133,3 +133,23 @@ if __name__ == '__main__':
     print_ts(f"Saving output prediction at {trainer.log_dir}/prediction_resluts.yaml")
     with open(os.path.join(trainer.log_dir, 'prediction_resluts.yaml'), 'w') as f_out:
         yaml.dump(report, f_out)
+
+    # roi aggregation prediction
+    if 'roi_prediction' in params:
+        slides_idx, rois_idx = dm.ds_predict.patient_reference
+        slides_idx = np.array(slides_idx)
+        rois_idx = np.array(rois_idx)
+
+        if params['roi_prediction']['level'] == 'roi':
+            level_idx = rois_idx
+        elif params['roi_prediction']['level'] == 'slide':
+            level_idx = slides_idx
+
+        
+        for idx in range(np.max(level_idx)):
+            roi_pred = y_pred[level_idx == idx]
+            roi_truth = y_test[level_idx == idx]
+            
+            roi_report = classification_report(y_test, y_pred, output_dict=True)
+
+
