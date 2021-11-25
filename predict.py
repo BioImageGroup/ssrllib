@@ -116,7 +116,8 @@ if __name__ == '__main__':
         ('classifier', svc),
     ])
 
-    grid = GridSearchCV(pipeline, cv=5, n_jobs=4, param_grid=params['param_grid'], scoring='accuracy')
+    params['grid_search_hparams']['estimator'] = pipeline
+    grid = GridSearchCV(**params['grid_search_hparams'])
 
     grid.fit(x_train, y_train)
     print_ts(f'Grid search found the best parameter config: \n{grid.best_params_}\n and score {grid.best_score_}')
