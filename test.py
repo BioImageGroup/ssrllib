@@ -10,7 +10,7 @@ import pytorch_lightning as pl
 import torch
 import yaml
 from pytorch_lightning.utilities.seed import seed_everything
-from ssrllib.data.datamodule import DataModule
+from ssrllib.data.datamodule import ClassificationDataModule
 from ssrllib.util.common import create_module
 from ssrllib.util.io import print_ts
 from torchvision.transforms import Compose
@@ -80,7 +80,7 @@ if __name__ == '__main__':
             transforms.append(create_module(t))
 
     # params['datamodule']['dataset_hparams']['train']['transforms'] = Compose(transforms)
-    dm = DataModule(**params['datamodule'])
+    dm = ClassificationDataModule(**params['datamodule'])
 
 
     # ---------- DOWNSTREAM MODEL LOADING ---------- #

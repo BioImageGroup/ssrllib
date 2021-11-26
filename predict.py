@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 import torch
 import yaml
 from pytorch_lightning.utilities.seed import seed_everything
-from ssrllib.data.datamodule import DataModule
+from ssrllib.data.datamodule import ClassificationDataModule, PredictionDataModule
 from ssrllib.util.common import create_module
 from ssrllib.util.io import print_ts
 from torchvision.transforms import Compose
@@ -52,8 +52,7 @@ if __name__ == '__main__':
 
     # ---------- DATA LOADING ---------- #
     # Seed all random processes
-    print_ts(f"Seeding all stochastic processes with seed {params['seed']}")
-    seed_everything(params['seed'])
+    seed_everything(**params['seeder'])
 
     # Loading data from filesystem
     print_ts("Initializing datasets")
@@ -63,7 +62,7 @@ if __name__ == '__main__':
             transforms.append(create_module(t))
 
     # params['datamodule']['dataset_hparams']['train']['transforms'] = Compose(transforms)
-    dm = DataModule(**params['datamodule'])
+    dm = PredictionDataModule(**params['datamodule'])
 
 
     # ---------- DOWNSTREAM MODEL LOADING ---------- #
@@ -98,11 +97,11 @@ if __name__ == '__main__':
         labels.append(int(label))
 
     # we alwayws want the same test set
-    x_train, x_test, y_train, y_test = train_test_split(features, labels, test_size=params['pred']['test_size'], shuffle=True, random_state=0)
+    x_train, x_test, y_train, y_test = train_test_split(features, labels, test_size=params['splits']['test_size'], shuffle=True, random_state=0)
     
     # and then we discard some of the data if we want to test for lower levels of supervision
-    if params['pred']['train_size'] != 1:
-        x_train, _, y_train, _ = train_test_split(x_train, y_train, train_size=params['pred']['train_size'], shuffle=True, random_state=0)
+    if params['splits']['train_size'] != 1:
+        x_train, _, y_train, _ = train_test_split(x_train, y_train, train_size=params['splits']['train_size'], shuffle=True, random_state=0)
 
     print_ts(f'test class distribution: {np.bincount(y_test)}')
 
@@ -123,7 +122,7 @@ if __name__ == '__main__':
     print_ts(f'Grid search found the best parameter config: \n{grid.best_params_}\n and score {grid.best_score_}')
     y_pred = grid.predict(x_test)
     
-    print_ts(f"Prediction using a Linear SVM over {params['pred']['train_size']*100}% of labelled data")
+    print_ts(f"Prediction using a Linear SVM over {params['splits']['train_size']*100}% of labelled data")
     print_ts(f'Classification report:\n{classification_report(y_test, y_pred)}')
 
     report = classification_report(y_test, y_pred, output_dict=True)
