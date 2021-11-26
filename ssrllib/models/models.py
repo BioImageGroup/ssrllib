@@ -7,8 +7,44 @@ from ssrllib.util.io import print_ts
 from ssrllib.util.tools import jigsaw_tile, jigsaw_scramble
 import numpy as np
 
+class BaseModule(pl.LightningModule):
+    def __init__(self):
+        super(BaseModule, self).__init__()
+        pass
+    
+    def configure_optimizers(self):
+        pass
+    
+    def load_from_pretext(self, pretrained_model, drop_head, freeze_backbone):
+        # Laod state dict from filesystem
+        try:
+            state_dict = torch.load(pretrained_model)['state_dict']
+        except KeyError:
+            state_dict = torch.load(pretrained_model)
 
-class SelfSupervisedModule(pl.LightningModule):
+        # Drop head parameters from state dict
+        if drop_head:
+            state_dict = {name: param for name, param in state_dict.items() if not name.startswith('head')}
+
+        # Now load the remaining parameters
+        self.load_state_dict(state_dict, strict=False)
+
+        # freeze the backbone network layers
+        if freeze_backbone:
+            for name, param in self.named_parameters():
+                if not name.startswith('head'):
+                    param.requires_grad = False
+
+    def set_test_log_prefix(self, prefix: str):
+        self.test_log_prefix = prefix
+
+    def _log_result(self, preds, prefix='train'):
+        # get the tensorboard summary writer
+        tensorboard = self.logger.experiment
+        tensorboard.add_images(prefix, preds, global_step=self.current_epoch, dataformats='NCHW')
+
+
+class TrainingModule(BaseModule):
     def __init__(self, backbone_hparams, head_hparams, optimizer_hparams, loss_hparams, scheduler_hparams,
                  metric_hparams, input_shape):
         """
@@ -18,7 +54,7 @@ class SelfSupervisedModule(pl.LightningModule):
             optimizer_name - Name of the optimizer to use. Currently supported: Adam, SGD
             optimizer_hparams - Hyperparameters for the optimizer, as dictionary. This includes lr, weight decay, etc.
         """
-        super(SelfSupervisedModule, self).__init__()
+        super(TrainingModule, self).__init__()
 
         self.example_input_array = (1,) + tuple(input_shape)
         if len(tuple(input_shape)) == 4:
@@ -131,7 +167,6 @@ class SelfSupervisedModule(pl.LightningModule):
                 self._log_result(preds.detach().cpu().numpy(), prefix='val/preds')
                 self._log_result(labels.detach().cpu().numpy(), prefix='val/labels')
 
-
     def test_step(self, batch, batch_idx):
         imgs, labels = batch
         preds = self(imgs)
@@ -149,74 +184,40 @@ class SelfSupervisedModule(pl.LightningModule):
                 self._log_result(labels.detach().cpu().numpy(), prefix='test/labels')
 
 
-    def predict_step(self, batch, batch_idx):
-        imgs, labels = batch
-        preds = self.backbone(imgs)
+class PredictionModule(BaseModule):
+    def __init__(self, backbone_hparams, input_shape, metta=False):
+        super(PredictionModule, self).__init__()
+        self.metta = False
 
-        return preds, labels
-        
-
-    def _log_result(self, preds, prefix='train'):
-        # get the tensorboard summary writer
-        tensorboard = self.logger.experiment
-        tensorboard.add_images(prefix, preds, global_step=self.current_epoch, dataformats='NCHW')
-
-    def load_from_pretext(self, pretrained_model, drop_head, freeze_backbone):
-        # Laod state dict from filesystem
-        try:
-            state_dict = torch.load(pretrained_model)['state_dict']
-        except KeyError:
-            state_dict = torch.load(pretrained_model)
-
-        # Drop head parameters from state dict
-        if drop_head:
-            state_dict = {name: param for name, param in state_dict.items() if not name.startswith('head')}
-
-        # Now load the remaining parameters
-        self.load_state_dict(state_dict, strict=False)
-
-        # freeze the backbone network layers
-        if freeze_backbone:
-            for name, param in self.named_parameters():
-                if not name.startswith('head'):
-                    param.requires_grad = False
-
-    def set_test_log_prefix(self, prefix: str):
-        self.test_log_prefix = prefix
-
-
-class GANModule(pl.LightningModule):
-    def __init__(self, network_hparams, optimizer_hparams, loss_hparams, scheduler_hparams, metric_hparams,
-                 input_shape, latent_dim, batch_size):
-        super(GANModule, self).__init__()
-
-        # ---------- backbone model ---------- #
-        self.generator = ssrllib.util.common.create_module(network_hparams['generator'])
-        self.discriminator = ssrllib.util.common.create_module(network_hparams['discriminator'])
-
-        # ---------- input shape ---------- #
         # Example input for visualizing the graph in Tensorboard
         self.example_input_array = torch.zeros((1,) + tuple(input_shape), dtype=torch.float32)
 
-        # ---------- optimizer, loss & metric ---------- #
-        # Save optimizer params
-        self.optimizer_hparams = optimizer_hparams
-        self.optimizer_hparams['params'] = self.parameters()
+        # ---------- backbone model ---------- #
+        self.backbone = ssrllib.util.common.create_module(backbone_hparams)
 
-        # Save scheduler params
-        self.scheduler_hparams = scheduler_hparams
 
-        # Create loss function
-        self.loss_module = ssrllib.util.common.create_module(loss_hparams)
-
-        # Create metric
-        self.metric_name = metric_hparams['name']
-        self.metric = ssrllib.util.common.create_module(metric_hparams)
-
-        # ---------- latent space ---------- #
-        self.n_sample = 10
-        self.latent_dim = latent_dim
+        # ---------- done ---------- #
+        # nothing else is needed to perform inference
 
     def forward(self, x):
-        sample_z = torch.randn(self.n_sample, self.latent)
-        real_img = x
+        return self.backbone(x)
+
+    def predict_step(self, batch, batch_idx):
+        if self.metta:
+            return self.MeTTA_predict_step(batch, batch_idx)
+        else: 
+            return self.standard_predict_step(batch, batch_idx)
+
+    def standard_predict_step(self, batch, batch_idx):
+        imgs, labels = batch
+        preds = self(imgs)
+
+        return preds, labels
+
+    # TODO: Implement averagin of embeddings
+    def MeTTA_predict_step(self, batch, batch_idx):
+        print('HERE')
+        imgs, labels = batch
+        print(type(imgs))
+
+        exit()

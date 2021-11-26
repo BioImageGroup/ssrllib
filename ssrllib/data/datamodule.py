@@ -27,7 +27,6 @@ def make_splits(total, split):
 
     return [train, val_test], [val, test]
 
-
 class DataModule(pl.LightningDataModule):
     def __init__(self, dataset_hparams: dict, batch_sizes: dict, workers: dict) -> None:
         """
@@ -40,13 +39,18 @@ class DataModule(pl.LightningDataModule):
         :param test_batch_size: batch size for the testing dataloader
         :param task_name: the task for which we should load the data: rotation/autoencoding/jigsaw/classification
         """
-        super().__init__()
+        super(DataModule, self).__init__()
+
         self.dataset_hparams = dataset_hparams
         self.batch_sizes = batch_sizes
         self.workers = workers
 
     def prepare_data(self) -> None:
         pass
+
+class ClassificationDataModule(DataModule):
+    def __init__(self, dataset_hparams: dict, batch_sizes: dict, workers: dict) -> None:
+        super(ClassificationDataModule, self).__init__(dataset_hparams=dataset_hparams, batch_sizes=batch_sizes, workers=workers)
 
     def setup(self, stage: Optional[str] = None, test_prefix = None):
         # Load the dataset
@@ -66,10 +70,6 @@ class DataModule(pl.LightningDataModule):
             print_ts('Loading test dataset')
             self.ds_test = create_module(self.dataset_hparams['test'])
 
-        elif stage == 'predict':
-            print_ts('Loading whole dataset for prediction')
-            self.ds_predict = create_module(self.dataset_hparams['pred'])
-
     def train_dataloader(self):
         return DataLoader(self.ds_train, batch_size=self.batch_sizes['train'], num_workers=self.workers['train'], shuffle=True)
 
@@ -79,5 +79,16 @@ class DataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(self.ds_test, batch_size=self.batch_sizes['test'], num_workers=self.workers['test'])
 
+
+class PredictionDataModule(DataModule):
+    def __init__(self, dataset_hparams: dict, batch_sizes: dict, workers: dict) -> None:
+        super(PredictionDataModule, self).__init__(dataset_hparams=dataset_hparams, batch_sizes=batch_sizes, workers=workers)
+ 
+    def setup(self, stage: Optional[str] = None, test_prefix = None):
+        if stage == 'predict':
+            print_ts('Loading whole dataset for prediction')
+            self.ds_predict = create_module(self.dataset_hparams['pred'])
+
     def predict_dataloader(self):
         return DataLoader(self.ds_predict, batch_size=self.batch_sizes['pred'], num_workers=self.workers['pred'])
+
