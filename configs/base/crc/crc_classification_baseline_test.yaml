@@ -125,7 +125,7 @@ head_params: &head
 
 # ___ model ___ #
 model:
-  name: SelfSupervisedModule
+  name: TrainingModule
   backbone_hparams: *backbone
   head_hparams: *head
   optimizer_hparams: *optimizer
@@ -175,9 +175,8 @@ callbacks:
 trainer:
   max_epochs: 100
   gpus: 1
-  accelerator: dp
-  flush_logs_every_n_steps: 1
+  strategy: dp
   log_every_n_steps: 1
-  progress_bar_refresh_rate: 1
+
 
 seed: 0

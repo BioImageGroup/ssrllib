@@ -21,7 +21,7 @@ dataset: &dataset
     <<: *dataset_properties
     split:
       - 0
-      - 0.6
+      - 0.06
     splitting: stratified
   val:
     <<: *dataset_properties
@@ -50,12 +50,12 @@ datamodule:
 
 # ___ transforms ___ # (Optional)
 transforms:
-  - name: Rotate90
+  - name: RandomRotate90
     prob: 0.5
-  - name: Flip
+  - name: RandomFlip
     prob: 0.5
     dim: 0
-  - name: Flip
+  - name: RandomFlip
     prob: 0.5
     dim: 1
   - name: ContrastAdjust
@@ -93,18 +93,6 @@ metric: &metric
 # --------------------------------------------------------------------- #
 # -------------------------- LIGHTNING MODEL -------------------------- #
 # --------------------------------------------------------------------- #
-# ___ resnet configs ___ #
-resnet_18: &res18_layers
-  - 2
-  - 2
-  - 2
-  - 2
-  
-resnet_34: &res34_layers
-  - 3
-  - 4
-  - 6
-  - 3
 
 # ___ backbone ___ #
 backbone_params: &backbone
@@ -125,7 +113,7 @@ head_params: &head
 
 # ___ model ___ #
 model:
-  name: SelfSupervisedModule
+  name: TrainingModule
   backbone_hparams: *backbone
   head_hparams: *head
   optimizer_hparams: *optimizer
@@ -136,12 +124,6 @@ model:
     - *data_channels
     - *size
     - *size
-
-# ___ load pretrained ___ # (Optional)
-# pretrained:
-#   pretrained_model: /home/nicola/Documents/remote_pycharm_projects/ssrllib/logs/classification_baseline/lightning_logs/low_lr/checkpoints/epoch=36-step=702.ckpt
-#   drop_head: True
-#   freeze_backbone: False
 
 
 # ------------------------------------------------------------- #
@@ -173,11 +155,12 @@ callbacks:
 # ___ trainer ___ #
 
 trainer:
+  default_root_dir: /home/nicola/ssrllib_logs/
   max_epochs: 100
   gpus: 1
-  accelerator: dp
-  flush_logs_every_n_steps: 1
+  strategy: dp
   log_every_n_steps: 1
-  progress_bar_refresh_rate: 1
 
-seed: 0
+seeder: 
+  seed: 0
+  workers: True

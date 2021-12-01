@@ -8,9 +8,9 @@
 
 # ___ base ___ #
 dataset_properties: &dataset_properties
-  name: ClassificationROIDataset
-  data_dir: /home/nicola/data/meso
-  type: ndpi
+  name: ClassificationDataset
+  data_dir: /home/nicola/data/crc_pngseq
+  type: png
   size: &size 128
 
 in_channels: &data_channels 3
@@ -56,11 +56,10 @@ model:
     - *data_channels
     - *size
     - *size
-  metta: False
 
 # ___ load pretrained ___ # (Optional)
-pretrained: 
-  pretrained_model: /home/nicola/ssrllib_logs/meso_pretext_jigsaw/lightning_logs/version_0/checkpoints/epoch=12-step=285.ckpt
+pretrained:
+  pretrained_model: /home/nicola/ssrllib_logs/crc_pretext_jigsaw/lightning_logs/version_0/checkpoints/epoch=15-step=3839.ckpt
   drop_head: True
   freeze_backbone: True
 
@@ -78,7 +77,6 @@ trainer:
   log_every_n_steps: 1
 
 
-
 # --------------------------------------------------------------------- #
 # ------------------------- PREDICTION CONFIG ------------------------- #
 # --------------------------------------------------------------------- #
@@ -92,11 +90,9 @@ splits:
     - 1 # 60% of data (we consider this full supervision)
 
 param_grid: &param_grid
-  classifier__kernel:
+  classifier__kernel: 
     - rbf
-    - linear
   classifier__C:
-    - 0.1
     - 1
     - 10
     - 100
@@ -107,14 +103,13 @@ param_grid: &param_grid
     - 0
   downsampler__sampling_strategy:
     - majority
-    - auto
   downsampler__n_neighbors:
     - 1
-    - 2
+    - 2 
     - 3
 
 grid_search_hparams:
-  cv: 5
+  cv: 3
   n_jobs: 6
   param_grid: *param_grid
   scoring: accuracy
