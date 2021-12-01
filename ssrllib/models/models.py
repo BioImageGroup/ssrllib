@@ -187,7 +187,7 @@ class TrainingModule(BaseModule):
 class PredictionModule(BaseModule):
     def __init__(self, backbone_hparams, input_shape, metta=False):
         super(PredictionModule, self).__init__()
-        self.metta = False
+        self.metta = metta
 
         # Example input for visualizing the graph in Tensorboard
         self.example_input_array = torch.zeros((1,) + tuple(input_shape), dtype=torch.float32)
@@ -216,8 +216,12 @@ class PredictionModule(BaseModule):
 
     # TODO: Implement averagin of embeddings
     def MeTTA_predict_step(self, batch, batch_idx):
-        print('HERE')
         imgs, labels = batch
-        print(type(imgs))
 
-        exit()
+        embeddings = []
+        for aug in imgs:
+            embeddings.append(self(aug))
+        
+        mean_embeddings = torch.cat(embeddings, dim=0).mean(dim=0).reshape(1, -1)
+
+        return mean_embeddings, labels

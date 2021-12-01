@@ -3,17 +3,16 @@ from typing import List, Tuple
 
 import numpy as np
 import torch
-from ssrllib.util.augmentation import Flip, PretextRotation
+from torchvision.transforms.transforms import ToPILImage, ToTensor
+from ssrllib.util.augmentation import RandomFlip, PretextRotation
 from ssrllib.util.tools import jigsaw_scramble, jigsaw_tile
 from torch.utils.data import Dataset
-from torchvision.transforms import RandomCrop, Compose
+from torchvision.transforms import RandomCrop, Compose, Resize, RandomResizedCrop, RandomHorizontalFlip, RandomVerticalFlip
 from ssrllib.util import io
 from ssrllib.util import tools
 from ssrllib.util.io import print_ts
 
-from albumentations.augmentations.crops.transforms import RandomResizedCrop
-from albumentations.augmentations.transforms import Flip
-import albumentations
+import albumentations as A
 
 
 class MultiFileClassificationDataset(Dataset):
@@ -144,11 +143,10 @@ class MultiFileStandardClassificationDataset(MultiFileClassificationDataset):
         self.images, self.labels = self._tile_images(size)
 
         self._split_data()
-        self.crop = Compose([RandomCrop(size=size)])
         self.transforms = transforms
 
     def __getitem__(self, item):
-        return self.transforms(self.crop(self.images[item])), self.labels[item]
+        return self.transforms(self.images[item]), self.labels[item]
 
 
 
@@ -173,7 +171,7 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
         self.xmls = io.get_class_files(self.data_dir, type='xml')
         self.rois = io.load_rois(self.xmls)
 
-        self.images, self.labels, self.patient_reference = self._tile_rois(size)
+        self.images, self.labels, self.patient_reference = tools.tile_rois(self.images, self.rois, self.labels, size)
 
         self._split_data()
         # self.crop = Compose([RandomCrop(size=size), Normalize(0, 1)])
@@ -232,7 +230,7 @@ class RotationROIDataset(MultiFileROIClassificationDataset):
             base_angle (int, optional): Base angle of rotation. Defaults to 90.
             multiples (int, optional): Number of possible multiples of the angle uxed for rotation. Defaults to 4.
         """
-        super(RotationDataset, self).__init__(data_dir, type, size, split, splitting,transforms)
+        super(RotationROIDataset, self).__init__(data_dir, type, size, split, splitting,transforms)
 
         self.rotation = PretextRotation(base_angle, multiples)
 
@@ -375,15 +373,47 @@ class MeTTADataset(MultiFileStandardClassificationDataset):
         super(MeTTADataset, self).__init__(data_dir=data_dir, type=type, size=size, split=split, splitting=splitting)
 
         self.transforms = [
-            albumentations.Compose([RandomResizedCrop(self.size, self.size, p=0.5), Flip(prob=0.5, dim=1)]),
-            albumentations.Compose([RandomResizedCrop(self.size, self.size, p=0.5), Flip(prob=0.5, dim=1)]),
-            albumentations.Compose([RandomResizedCrop(self.size, self.size, p=0.5), Flip(prob=0.5, dim=1)])
+            Compose([RandomResizedCrop(size), RandomHorizontalFlip(p=0.5), RandomVerticalFlip(p=0.5)]),
+            Compose([RandomResizedCrop(size), RandomHorizontalFlip(p=0.5), RandomVerticalFlip(p=0.5)]),
+            Compose([RandomResizedCrop(size), RandomHorizontalFlip(p=0.5), RandomVerticalFlip(p=0.5)]),
+        ]
+
+        self.to_image = ToPILImage()
+        self.to_tensor = ToTensor()
+
+    def __getitem__(self, item):
+        augmentations = []
+        for transform in self.transforms:
+            res = transform(self.images[item])
+            augmentations.append(res)
+
+        label = self.labels[item]
+
+        return augmentations, label
+
+class MeTTAROIDataset(MultiFileROIClassificationDataset):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], splitting: str = 'sorted'):
+        """This Dataset implements the Meat Test Time approach to generate mean embeddings at test time 
+
+        Args:
+            data_dir (str): The root directory of the data 
+            type (str): The file extension of the images
+            size (int): The input size of the neural network
+            split (Tuple[int, int]): Starting and Ending position of the portion of data to read
+            splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
+        """
+        super(MeTTAROIDataset, self).__init__(data_dir=data_dir, type=type, size=size, split=split, splitting=splitting)
+
+        self.transforms = [
+            A.Compose([RandomResizedCrop(self.size, self.size, p=0.5), Flip(p=0.5)]),
+            A.Compose([RandomResizedCrop(self.size, self.size, p=0.5), Flip(p=0.5)]),
+            A.Compose([RandomResizedCrop(self.size, self.size, p=0.5), Flip(p=0.5)])
         ]
 
     def __getitem__(self, item):
         augmentations = []
         for transform in self.transforms:
-            res = transform(image=self.images[item])
+            res = transform(image=np.array(self.images[item]))
             augmentations.append(res['image'])
 
         label = self.labels[item]

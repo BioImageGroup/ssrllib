@@ -140,10 +140,10 @@ def tile_rois(images, rois, labels, size: int):
             bbox = get_bbox_from_path(roi)
 
             # Skip if bbox is not big enough
-            if not io.check_bbox_size(bbox, size):
+            if not check_bbox_size(bbox, size):
                 continue
 
-            crop = io.extract_bbox_from_image(image, bbox)
+            crop = extract_bbox_from_image(image, bbox)
             tiles = tile_image(crop, size)
             labels = [label, ] * len(tiles)
             slides_ref = [image_idx, ] * len(tiles) 

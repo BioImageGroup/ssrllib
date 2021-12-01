@@ -40,7 +40,7 @@ class MinMaxNormalize():
         return (x - m + eps) / (M - m + eps)
 
 
-class Flip(object):
+class RandomFlip(object):
     """
     Perform a flip along a specific dimension
 
@@ -64,7 +64,7 @@ class Flip(object):
             return x
 
 
-class Rotate90(object):
+class RandomRotate90(object):
     """
     Rotate the inputs by 90 degree angles
 

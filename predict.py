@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
     # ---------- FEATURE EXTRACTION ---------- #
     # add root dir with the same name as the config file
-    params['trainer']['default_root_dir'] = os.path.join('logs', config_name)
+    params['trainer']['default_root_dir'] = os.path.join(params['trainer']['default_root_dir'], config_name)
     trainer = pl.Trainer(**params['trainer'])
 
     # manually save the config file, we need to manually create the logdir because it is not
@@ -97,59 +97,64 @@ if __name__ == '__main__':
         labels.append(int(label))
 
     # we alwayws want the same test set
-    x_train, x_test, y_train, y_test = train_test_split(features, labels, test_size=params['splits']['test_size'], shuffle=True, random_state=0)
-    
-    # and then we discard some of the data if we want to test for lower levels of supervision
-    if params['splits']['train_size'] != 1:
-        x_train, _, y_train, _ = train_test_split(x_train, y_train, train_size=params['splits']['train_size'], shuffle=True, random_state=0)
-
+    x, x_test, y, y_test = train_test_split(features, labels, test_size=params['splits']['test_size'], shuffle=True, random_state=0)
     print_ts(f'test class distribution: {np.bincount(y_test)}')
 
-    downsample_enn = EditedNearestNeighbours(sampling_strategy='majority')
-    upsample_smote = SMOTE(random_state=0)
-    svc = SVC()
+    ### --- ###
+    reports = {}
+    for train_size in params['splits']['train_sizes']:
+        # and then we discard some of the data if we want to test for lower levels of supervision
+        if train_size != 1:
+            x_train, _, y_train, _ = train_test_split(x, y, train_size=train_size, shuffle=True, random_state=0)
+        print_ts(f'train class distribution: {np.bincount(y_train)}')
 
-    pipeline = Pipeline([
-        ('downsampler', downsample_enn), 
-        ('upsampler', upsample_smote),
-        ('classifier', svc),
-    ])
 
-    params['grid_search_hparams']['estimator'] = pipeline
-    grid = GridSearchCV(**params['grid_search_hparams'])
+        enn = EditedNearestNeighbours()
+        smote = SMOTE()
+        svc = SVC()
 
-    grid.fit(x_train, y_train)
-    print_ts(f'Grid search found the best parameter config: \n{grid.best_params_}\n and score {grid.best_score_}')
-    y_pred = grid.predict(x_test)
-    
-    print_ts(f"Prediction using a Linear SVM over {params['splits']['train_size']*100}% of labelled data")
-    print_ts(f'Classification report:\n{classification_report(y_test, y_pred)}')
+        pipeline = Pipeline([
+            ('downsampler', enn), 
+            ('upsampler', smote),
+            ('classifier', svc),
+        ])
 
-    report = classification_report(y_test, y_pred, output_dict=True)
+        params['grid_search_hparams']['estimator'] = pipeline
+        grid = GridSearchCV(**params['grid_search_hparams'])
+
+        grid.fit(x_train, y_train)
+        print_ts(f'Grid search found the best parameter config: \n{grid.best_params_}\n and score {grid.best_score_}')
+        y_pred = grid.predict(x_test)
+        
+        print_ts(f"Prediction using a Linear SVM over {train_size*100}% of labelled data")
+        print_ts(f'Classification report:\n{classification_report(y_test, y_pred)}')
+
+        report = classification_report(y_test, y_pred, output_dict=True)
+        reports[str(train_size*100) + 'percent'] = report
 
     # manually save the config file, we need to manually create the logdir because it is not
     # yet created at this point, but we still need to log the config file as soon as possible
     os.makedirs(trainer.log_dir, exist_ok=True)
     print_ts(f"Saving output prediction at {trainer.log_dir}/prediction_resluts.yaml")
     with open(os.path.join(trainer.log_dir, 'prediction_resluts.yaml'), 'w') as f_out:
-        yaml.dump(report, f_out)
+        yaml.dump(reports, f_out)
 
-    # roi aggregation prediction
-    if 'roi_prediction' in params:
-        slides_idx, rois_idx = dm.ds_predict.patient_reference
-        slides_idx = np.array(slides_idx)
-        rois_idx = np.array(rois_idx)
+    # # roi aggregation prediction
+    # if 'roi_prediction' in params:
+    #     slides_idx, rois_idx = dm.ds_predict.patient_reference
+    #     slides_idx = np.array(slides_idx)
+    #     rois_idx = np.array(rois_idx)
 
-        if params['roi_prediction']['level'] == 'roi':
-            level_idx = rois_idx
-        elif params['roi_prediction']['level'] == 'slide':
-            level_idx = slides_idx
+    #     if params['roi_prediction']['level'] == 'roi':
+    #         level_idx = rois_idx
+    #     elif params['roi_prediction']['level'] == 'slide':
+    #         level_idx = slides_idx
 
         
-        for idx in range(np.max(level_idx)):
-            roi_pred = y_pred[level_idx == idx]
-            roi_truth = y_test[level_idx == idx]
+    #     for idx in range(np.max(level_idx)):
+    #         roi_pred = y_pred[level_idx == idx]
+    #         roi_truth = y_test[level_idx == idx]
             
-            roi_report = classification_report(y_test, y_pred, output_dict=True)
+    #         roi_report = classification_report(y_test, y_pred, output_dict=True)
 
 

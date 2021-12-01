@@ -34,8 +34,7 @@ if __name__ == '__main__':
 
     # ---------- DATA LOADING ---------- #
     # Seed all random processes
-    print_ts(f"Seeding all stochastic processes with seed {params['seed']}")
-    seed_everything(params['seed'])
+    seed_everything(**params['seeder'])
 
     # Loading data from filesystem
     print_ts("Initializing datasets")
@@ -67,7 +66,7 @@ if __name__ == '__main__':
 
     # ---------- FIT ---------- #
     # add root dir with the same name as the config file
-    params['trainer']['default_root_dir'] = os.path.join('logs', config_name)
+    params['trainer']['default_root_dir'] = os.path.join(params['trainer']['default_root_dir'], config_name)
     trainer = pl.Trainer(**params['trainer'])
 
     # manually save the config file, we need to manually create the logdir because it is not
