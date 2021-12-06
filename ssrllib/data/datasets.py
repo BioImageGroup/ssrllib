@@ -1,16 +1,17 @@
 from abc import abstractmethod
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
+from torchvision import transforms
 from torchvision.transforms.transforms import ToPILImage, ToTensor
-from ssrllib.util.augmentation import RandomFlip, PretextRotation
-from ssrllib.util.tools import jigsaw_scramble, jigsaw_tile
+from ssrllib.utils.augmentations import CustomAugmentation, PretextRotation
+from ssrllib.utils.tools import jigsaw_scramble, jigsaw_tile
 from torch.utils.data import Dataset
 from torchvision.transforms import RandomCrop, Compose, Resize, RandomResizedCrop, RandomHorizontalFlip, RandomVerticalFlip
-from ssrllib.util import io
-from ssrllib.util import tools
-from ssrllib.util.io import print_ts
+from ssrllib.utils import io
+from ssrllib.utils import tools
+from ssrllib.utils.io import print_ts
 
 import albumentations as A
 
@@ -18,7 +19,8 @@ import albumentations as A
 class MultiFileClassificationDataset(Dataset):
 
     def _split_data(self):
-        print_ts(f'starting class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
+        print_ts(
+            f'starting class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
         print_ts(f'Splitting -> {(self.splitting).upper()} (portion: {self.split})')
         if self.splitting == 'stratified':
             self._split_data_stratified()
@@ -27,9 +29,11 @@ class MultiFileClassificationDataset(Dataset):
         elif self.splitting == 'sorted':
             self._split_data_sorted()
         else:
-            NotImplementedError(f'Available splitting methods are stratified/uniform/sorted, got {self.splitting}')
+            NotImplementedError(
+                f'Available splitting methods are stratified/uniform/sorted, got {self.splitting}')
 
-        print_ts(f'final class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
+        print_ts(
+            f'final class distribution: {np.bincount(self.labels)} ({np.unique(self.labels)} classes)')
 
     def _split_data_sorted(self):
         start = int(len(self) * self.split[0])
@@ -54,7 +58,7 @@ class MultiFileClassificationDataset(Dataset):
 
         self.labels = labels_split
         self.images = images_split
-       
+
     def _split_data_stratified(self):
         class_dist = np.bincount(self.labels)
 
@@ -72,9 +76,9 @@ class MultiFileClassificationDataset(Dataset):
         self.labels = labels_split
         self.images = images_split
 
-    def __init__(self, data_dir: str, type: str, split: Tuple[float, float], splitting: str = 'sorted'):
-        """Base class for a dataset made of multiple classes and files. 
-        
+    def __init__(self, data_dir: str, type: str, split: Tuple[float, float], splitting: str = 'sorted', transforms: List[CustomAugmentation] = []):
+        """Base class for a dataset made of multiple classes and files.
+
         The structure this Class is intendend to cover is as follows:
             .
             |-- "data_dir"
@@ -87,7 +91,7 @@ class MultiFileClassificationDataset(Dataset):
             |     |           |-- "<Image-ID#_...>"
 
          Args:
-            data_dir (str): The root directory of the data 
+            data_dir (str): The root directory of the data
             type (str): The file extension of the images
             size (int): The input size of the neural network
             split (Tuple[int, int]): Starting and Ending position of the portion of data to read
@@ -103,6 +107,7 @@ class MultiFileClassificationDataset(Dataset):
         self.images = io.load_images(self.image_files, type=self.type)
         self.split = split
         self.splitting = splitting
+        self.transforms = Compose(transforms)
 
     @abstractmethod
     def __getitem__(self, item):
@@ -117,37 +122,35 @@ class MultiFileStandardClassificationDataset(MultiFileClassificationDataset):
     def _tile_images(self, size: int):
         tiled_images = []
         tiled_labels = []
-        
+
         for image, label in zip(self.images, self.labels):
             tiles = tools.tile_image(np.array(image), size)
             labels = [label, ] * len(tiles)
 
             tiled_images.extend(tiles)
             tiled_labels.extend(labels)
-        
+
         return torch.stack(tiled_images), np.array(tiled_labels)
 
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: Compose = Compose([])):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: List[CustomAugmentation] = []):
         """This class is an extension of MultiFilClassificationDataset, covering the possibility of having XML files for ROIs definition.
 
          Args:
-            data_dir (str): The root directory of the data 
+            data_dir (str): The root directory of the data
             type (str): The file extension of the images
             size (int): The input size of the neural network
             split (Tuple[int, int]): Starting and Ending position of the portion of data to read
             transforms (Compose, optional): transforms.Compose object containing data augmentation. Defaults to Compose([]).
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
-        super(MultiFileStandardClassificationDataset, self).__init__(data_dir, type, split, splitting)
+        super(MultiFileStandardClassificationDataset, self).__init__(
+            data_dir, type, split, splitting, transforms)
 
         self.images, self.labels = self._tile_images(size)
-
         self._split_data()
-        self.transforms = transforms
 
     def __getitem__(self, item):
         return self.transforms(self.images[item]), self.labels[item]
-
 
 
 class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
@@ -155,73 +158,73 @@ class MultiFileROIClassificationDataset(MultiFileClassificationDataset):
     def class_distr(self):
         return np.bincount(self.labels)
 
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], splitting: str = 'sorted', transforms: Compose = Compose([])):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: List[CustomAugmentation] = []):
         """This class is an extension of MultiFilClassificationDataset, covering the possibility of having XML files for ROIs definition.
 
          Args:
-            data_dir (str): The root directory of the data 
+            data_dir (str): The root directory of the data
             type (str): The file extension of the images
             size (int): The input size of the neural network
             split (Tuple[int, int]): Starting and Ending position of the portion of data to read
             transforms (Compose, optional): transforms.Compose object containing data augmentation. Defaults to Compose([]).
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
-
-        super().__init__(data_dir, type, split, splitting)
+        super().__init__(data_dir, type, split, splitting, transforms)
         self.xmls = io.get_class_files(self.data_dir, type='xml')
         self.rois = io.load_rois(self.xmls)
 
-        self.images, self.labels, self.patient_reference = tools.tile_rois(self.images, self.rois, self.labels, size)
+        self.images, self.labels, self.patient_reference = tools.tile_rois(
+            self.images, self.rois, self.labels, size)
 
         self._split_data()
         # self.crop = Compose([RandomCrop(size=size), Normalize(0, 1)])
         self.crop = Compose([RandomCrop(size=size)])
-        self.transforms = transforms
 
     def __getitem__(self, item):
-        return self.transforms(self.crop(self.images[item])), self.labels[item]
+        return self.transforms(self.images[item]), self.labels[item]
 
     def get_patient_reference(self):
         return self.patient_reference
 
 
 class ClassificationROIDataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted'):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: List[CustomAugmentation] = []):
         """Just a name wrapper for a long class name
 
         Args:
-            data_dir (str): The root directory of the data 
+            data_dir (str): The root directory of the data
             type (str): The file extension of the images
             size (int): The input size of the neural network
             split (Tuple[int, int]): Starting and Ending position of the portion of data to read
             transforms (Compose, optional): transforms.Compose object containing data augmentation. Defaults to Compose([]).
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
-        super(ClassificationROIDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
+        super().__init__(data_dir, type, size, split, splitting, transforms)
 
 
 class ClassificationDataset(MultiFileStandardClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted'):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: List[CustomAugmentation] = []):
         """Just a name wrapper for a long class name
 
         Args:
-            data_dir (str): The root directory of the data 
+            data_dir (str): The root directory of the data
             type (str): The file extension of the images
             size (int): The input size of the neural network
             split (Tuple[int, int]): Starting and Ending position of the portion of data to read
             transforms (Compose, optional): transforms.Compose object containing data augmentation. Defaults to Compose([]).
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
-        super(ClassificationDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
+        super(ClassificationDataset, self).__init__(
+            data_dir, type, size, split, splitting, transforms)
 
 
 class RotationROIDataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted',
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: List[CustomAugmentation] = [],
                  base_angle: int = 90, multiples: int = 4):
         """Dataset for autonecoding training. Loads Images and performs the intended rotation before returning them
 
         Args:
-            data_dir (str): The root directory of the data 
+            data_dir (str): The root directory of the data
             type (str): The file extension of the images
             size (int): The input size of the neural network
             split (Tuple[int, int]): Starting and Ending position of the portion of data to read
@@ -230,24 +233,25 @@ class RotationROIDataset(MultiFileROIClassificationDataset):
             base_angle (int, optional): Base angle of rotation. Defaults to 90.
             multiples (int, optional): Number of possible multiples of the angle uxed for rotation. Defaults to 4.
         """
-        super(RotationROIDataset, self).__init__(data_dir, type, size, split, splitting,transforms)
+        super(RotationROIDataset, self).__init__(
+            data_dir, type, size, split, splitting, transforms)
 
         self.rotation = PretextRotation(base_angle, multiples)
 
     def __getitem__(self, item):
-        image = self.crop(self.transforms(self.images[item]))
+        image = self.transforms(self.images[item])
         image, label = self.rotation(image)
 
         return image, label
 
 
 class RotationDataset(MultiFileStandardClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted',
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: List[CustomAugmentation] = [],
                  base_angle: int = 90, multiples: int = 4):
         """Dataset for autonecoding training. Loads Images and performs the intended rotation before returning them
 
         Args:
-            data_dir (str): The root directory of the data 
+            data_dir (str): The root directory of the data
             type (str): The file extension of the images
             size (int): The input size of the neural network
             split (Tuple[int, int]): Starting and Ending position of the portion of data to read
@@ -256,19 +260,20 @@ class RotationDataset(MultiFileStandardClassificationDataset):
             base_angle (int, optional): Base angle of rotation. Defaults to 90.
             multiples (int, optional): Number of possible multiples of the angle uxed for rotation. Defaults to 4.
         """
-        super(RotationDataset, self).__init__(data_dir, type, size, split, splitting,transforms)
+        super(RotationDataset, self).__init__(
+            data_dir, type, size, split, splitting, transforms)
 
         self.rotation = PretextRotation(base_angle, multiples)
 
     def __getitem__(self, item):
-        image = self.crop(self.transforms(self.images[item]))
+        image = self.transforms(self.images[item])
         image, label = self.rotation(image)
 
         return image, label
 
 
 class AutoencodingROIDataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted'):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: List[CustomAugmentation] = []):
         """Dataset for autonecoding training. Loads Images and ROIs and returns them
 
         Args:
@@ -280,19 +285,20 @@ class AutoencodingROIDataset(MultiFileROIClassificationDataset):
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
 
-        super(AutoencodingROIDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
+        super(AutoencodingROIDataset, self).__init__(
+            data_dir, type, size, split, splitting, transforms)
 
     def __getitem__(self, item):
-        image = self.crop(self.transforms(self.images[item]))
+        image = self.transforms(self.images[item])
 
         return image, image
 
 
 class AutoencodingDataset(MultiFileStandardClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], transforms: Compose = Compose([]), splitting: str = 'sorted'):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted', transforms: List[CustomAugmentation] = []):
         """Dataset for autonecoding training. Loads Images and returns them
 
-    
+
 
         Args:
             data_dir (str): The root directory of the data 
@@ -303,16 +309,17 @@ class AutoencodingDataset(MultiFileStandardClassificationDataset):
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
 
         """
-        super(AutoencodingDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
+        super(AutoencodingDataset, self).__init__(
+            data_dir, type, size, split, splitting, transforms)
 
     def __getitem__(self, item):
-        image = self.crop(self.transforms(self.images[item]))
+        image = self.transforms(self.images[item])
 
         return image, image
 
 
 class JigsawROIDataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], permutations: str, transforms: Compose = Compose([]), splitting: str = 'sorted'):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], permutations: str, transforms: List[CustomAugmentation] = [], splitting: str = 'sorted'):
         """Dataset for jigsaw training. Loads Images and ROIs and performs the intended tiling before returning them
 
         Args:
@@ -324,19 +331,20 @@ class JigsawROIDataset(MultiFileROIClassificationDataset):
             transforms (Compose, optional): transforms.Compose object containing data augmentation. Defaults to Compose([]).
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
-        super(JigsawROIDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
+        super(JigsawROIDataset, self).__init__(
+            data_dir, type, size, split, splitting, transforms)
 
         self.permutations = np.load(permutations)
 
     def __getitem__(self, item):
-        image = self.crop(self.transforms(self.images[item]))
+        image = self.transforms(self.images[item])
         image = jigsaw_tile(image)
         image, label = jigsaw_scramble(image, self.permutations)
         return image, label
 
 
 class JigsawDataset(MultiFileStandardClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], permutations: str, transforms: Compose = Compose([]), splitting: str = 'sorted'):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], permutations: str, transforms: List[CustomAugmentation] = [], splitting: str = 'sorted'):
         """Dataset for jigsaw training. Loads Images and performs the intended tiling before returning them
 
         Args:
@@ -348,19 +356,34 @@ class JigsawDataset(MultiFileStandardClassificationDataset):
             transforms (Compose, optional): transforms.Compose object containing data augmentation. Defaults to Compose([]).
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
-        super(JigsawDataset, self).__init__(data_dir, type, size, split, splitting, transforms)
+        super(JigsawDataset, self).__init__(
+            data_dir, type, size, split, splitting, transforms)
 
         self.permutations = np.load(permutations)
 
     def __getitem__(self, item):
-        image = self.crop(self.transforms(self.images[item]))
+        image = self.transforms(self.images[item])
         image = jigsaw_tile(image)
         image, label = jigsaw_scramble(image, self.permutations)
         return image, label
 
 
-class MeTTADataset(MultiFileStandardClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], splitting: str = 'sorted'):
+class MeTTADataset(MultiFileROIClassificationDataset):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted'):
+        super().__init__(data_dir, type, size, split, splitting)
+
+        self.transforms = [
+            Compose([RandomResizedCrop(size), RandomHorizontalFlip(
+                p=0.5), RandomVerticalFlip(p=0.5)]),
+            Compose([RandomResizedCrop(size), RandomHorizontalFlip(
+                p=0.5), RandomVerticalFlip(p=0.5)]),
+            Compose([RandomResizedCrop(size), RandomHorizontalFlip(
+                p=0.5), RandomVerticalFlip(p=0.5)]),
+        ]
+
+
+class MeTTAStandardDataset(MeTTADataset):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted'):
         """This Dataset implements the Meat Test Time approach to generate mean embeddings at test time 
 
         Args:
@@ -370,16 +393,7 @@ class MeTTADataset(MultiFileStandardClassificationDataset):
             split (Tuple[int, int]): Starting and Ending position of the portion of data to read
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
-        super(MeTTADataset, self).__init__(data_dir=data_dir, type=type, size=size, split=split, splitting=splitting)
-
-        self.transforms = [
-            Compose([RandomResizedCrop(size), RandomHorizontalFlip(p=0.5), RandomVerticalFlip(p=0.5)]),
-            Compose([RandomResizedCrop(size), RandomHorizontalFlip(p=0.5), RandomVerticalFlip(p=0.5)]),
-            Compose([RandomResizedCrop(size), RandomHorizontalFlip(p=0.5), RandomVerticalFlip(p=0.5)]),
-        ]
-
-        self.to_image = ToPILImage()
-        self.to_tensor = ToTensor()
+        super().__init__(data_dir, type, size, split, splitting)
 
     def __getitem__(self, item):
         augmentations = []
@@ -391,8 +405,9 @@ class MeTTADataset(MultiFileStandardClassificationDataset):
 
         return augmentations, label
 
-class MeTTAROIDataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[int, int], splitting: str = 'sorted'):
+
+class MeTTAROIDataset(MeTTADataset):
+    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted'):
         """This Dataset implements the Meat Test Time approach to generate mean embeddings at test time 
 
         Args:
@@ -402,19 +417,13 @@ class MeTTAROIDataset(MultiFileROIClassificationDataset):
             split (Tuple[int, int]): Starting and Ending position of the portion of data to read
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
-        super(MeTTAROIDataset, self).__init__(data_dir=data_dir, type=type, size=size, split=split, splitting=splitting)
-
-        self.transforms = [
-            A.Compose([RandomResizedCrop(self.size, self.size, p=0.5), Flip(p=0.5)]),
-            A.Compose([RandomResizedCrop(self.size, self.size, p=0.5), Flip(p=0.5)]),
-            A.Compose([RandomResizedCrop(self.size, self.size, p=0.5), Flip(p=0.5)])
-        ]
+        super().__init__(data_dir, type, size, split, splitting)
 
     def __getitem__(self, item):
         augmentations = []
         for transform in self.transforms:
-            res = transform(image=np.array(self.images[item]))
-            augmentations.append(res['image'])
+            res = transform(self.images[item])
+            augmentations.append(res)
 
         label = self.labels[item]
 

@@ -25,7 +25,8 @@ class PreActResNetBlock(nn.Module):
         self.net = nn.Sequential(
             nn.BatchNorm2d(c_in),
             act_fn(),
-            nn.Conv2d(c_in, c_out, kernel_size=3, padding=1, stride=1 if not subsample else 2, bias=False),
+            nn.Conv2d(c_in, c_out, kernel_size=3, padding=1,
+                      stride=1 if not subsample else 2, bias=False),
             nn.BatchNorm2d(c_out),
             act_fn(),
             nn.Conv2d(c_out, c_out, kernel_size=3, padding=1, bias=False),
@@ -33,7 +34,8 @@ class PreActResNetBlock(nn.Module):
 
         # 1x1 convolution needs to apply non-linearity as well as not done on skip connection
         self.downsample = (
-            nn.Sequential(nn.BatchNorm2d(c_in), act_fn(), nn.Conv2d(c_in, c_out, kernel_size=1, stride=2, bias=False))
+            nn.Sequential(nn.BatchNorm2d(c_in), act_fn(), nn.Conv2d(
+                c_in, c_out, kernel_size=1, stride=2, bias=False))
             if subsample
             else None
         )
@@ -48,21 +50,10 @@ class PreActResNetBlock(nn.Module):
 
 # From the official pytorch implementation
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
-    """3x3 convolution with padding"""
-    return nn.Conv2d(
-        in_planes,
-        out_planes,
-        kernel_size=3,
-        stride=stride,
-        padding=dilation,
-        groups=groups,
-        bias=False,
-        dilation=dilation,
-    )
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation)
 
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
-    """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
@@ -176,6 +167,7 @@ class Bottleneck(nn.Module):
 #################################################
 # ---------------- AUTOENCODER ---------------- #
 #################################################
+
 class Conv2D(nn.Module):
     """
     2D convolutional layer
@@ -240,7 +232,8 @@ class Deconv2D(nn.Module):
     def __init__(self, in_channels, out_channels, bias=True, activation='relu'):
         super().__init__()
 
-        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2, bias=bias)
+        self.up = nn.ConvTranspose2d(
+            in_channels, out_channels, kernel_size=2, stride=2, bias=bias)
 
         if activation == 'relu':
             self.activation = nn.ReLU()
@@ -296,7 +289,8 @@ class AEEncoder2D(AEEncoder):
             # print(f'encoder level {i} out features {in_features} -> {out_features}')
 
             # convolutional block
-            conv_block = Conv2D(in_features, out_features, norm=norm, dropout=dropout, activation=activation)
+            conv_block = Conv2D(in_features, out_features, norm=norm,
+                                dropout=dropout, activation=activation)
             self.features.add_module('convblock%d' % (i + 1), conv_block)
 
             # pooling
@@ -347,9 +341,3 @@ class AEDecoder2D(AEDecoder):
         outputs = self.output(outputs)
 
         return outputs
-
-
-#################################################
-# ---------------- AUTOENCODER ---------------- #
-#################################################
-

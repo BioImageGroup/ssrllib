@@ -1,13 +1,30 @@
 {
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Current File",
+            "name": "predictor.py",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            "program": "predictor.py",
             "console": "integratedTerminal",
-            "args": ["--config", "configs/autoencoding/meso/meso_downstream_autoencoding.yaml"],
+            "args": [
+                "--config",
+                "/home/nicola/ssrllib/configs/crc/autoencoding/downstream/crc_autoencoding_downstream.yaml"
+            ]
+        },
+        {
+            "name": "trainer.py + fit",
+            "type": "python",
+            "request": "launch",
+            "program": "trainer.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--config",
+                "./config.yaml"
+            ]
         }
     ]
 }

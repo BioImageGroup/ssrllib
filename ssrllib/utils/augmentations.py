@@ -5,7 +5,16 @@ import torch
 from scipy.ndimage import rotate
 import numpy.random as rnd
 
-class PretextRotation(object):
+
+class CustomAugmentation(object):
+    def __init(self):
+        pass
+
+    def __call__(self, x: torch.Tensor):
+        pass
+
+
+class PretextRotation(CustomAugmentation):
     def __init__(self, base_angle: int, multiples: int):
         """
         Apply a random rotation of (k * base) degrees, where k = {0, 1, 2, 3}. It also returns the degrees along with the
@@ -28,7 +37,7 @@ class PretextRotation(object):
         return x, mult
 
 
-class MinMaxNormalize():
+class MinMaxNormalize(CustomAugmentation):
     def __init__(self, min=0, max=1):
         self.min = min
         self.max = max
@@ -40,7 +49,7 @@ class MinMaxNormalize():
         return (x - m + eps) / (M - m + eps)
 
 
-class RandomFlip(object):
+class RandomFlip(CustomAugmentation):
     """
     Perform a flip along a specific dimension
 
@@ -64,7 +73,7 @@ class RandomFlip(object):
             return x
 
 
-class RandomRotate90(object):
+class RandomRotate90(CustomAugmentation):
     """
     Rotate the inputs by 90 degree angles
 
@@ -85,7 +94,7 @@ class RandomRotate90(object):
             return x
 
 
-class ContrastAdjust(object):
+class ContrastAdjust(CustomAugmentation):
     """
     Apply contrast adjustments to the data
 
@@ -119,7 +128,7 @@ class ContrastAdjust(object):
             return x
 
 
-class AddNoise(object):
+class AddNoise(CustomAugmentation):
     """
     Adds noise to the input
 

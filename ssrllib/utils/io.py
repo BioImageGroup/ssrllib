@@ -7,6 +7,7 @@ from PIL import Image
 import numpy as np
 
 from openslide import OpenSlide
+import logging
 
 
 def print_ts(text: str):
@@ -82,7 +83,7 @@ def get_class_files(data_dir: str, type: str = 'ndpi') -> List[str]:
     return files
 
 
-def get_class_labels(data_dir, type = 'ndpi') -> List[int]:
+def get_class_labels(data_dir, type='ndpi') -> List[int]:
     """Gathers all class labels from folder structure
 
     Args:

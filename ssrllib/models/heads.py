@@ -13,7 +13,7 @@ from ssrllib.models.blocks import Deconv2D, AEDecoder
 class LinearHead(nn.Module):
     def __init__(self, in_features: int = 512, task_classes: int = 2):
         super().__init__()
-        
+
         self.linear = Linear(in_features=in_features, out_features=task_classes)
 
     def forward(self, x):
@@ -100,27 +100,33 @@ class ResnetDecoder(nn.Module):
     """
     This is the decoder part of the AutoEncoder. It takes in the code from the Encoder, and outputs an image
     """
-    def __init__(self, latent_dim, channel_factor=32):
+
+    def __init__(self, latent_dim: int, channel_factor: int = 32):
         super(ResnetDecoder, self).__init__()
         self.channels = 3
 
-        self.conv1 = nn.ConvTranspose2d(latent_dim, channel_factor * 8, 4, 2, 1, bias=False)
+        self.conv1 = nn.ConvTranspose2d(
+            latent_dim, channel_factor * 8, 4, 2, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(channel_factor * 8)
         self.relu1 = nn.ReLU(True)
         # # out_shape: channel_factor * 8, 4, 4
-        self.conv2 = nn.ConvTranspose2d(channel_factor * 8, channel_factor * 4, 4, 2, 1, bias=False)
+        self.conv2 = nn.ConvTranspose2d(
+            channel_factor * 8, channel_factor * 4, 4, 2, 1, bias=False)
         self.bn2 = nn.BatchNorm2d(channel_factor * 4)
         self.relu2 = nn.ReLU(True)
         # out_shape: channel_factor * 4, 8, 8
-        self.conv3 = nn.ConvTranspose2d(channel_factor * 4, channel_factor * 2, 4, 2, 1, bias=False)
+        self.conv3 = nn.ConvTranspose2d(
+            channel_factor * 4, channel_factor * 2, 4, 2, 1, bias=False)
         self.bn3 = nn.BatchNorm2d(channel_factor * 2)
         self.relu3 = nn.ReLU(True)
         # out_shape: channel_factor * 2, 16, 16
-        self.conv4 = nn.ConvTranspose2d(channel_factor * 2, channel_factor, 4, 2, 1, bias=False)
+        self.conv4 = nn.ConvTranspose2d(
+            channel_factor * 2, channel_factor, 4, 2, 1, bias=False)
         self.bn4 = nn.BatchNorm2d(channel_factor)
         self.relu4 = nn.ReLU(True)
         # out_shape: channel_factor, 32, 32
-        self.conv5 = nn.ConvTranspose2d(channel_factor, self.channels, 4, 2, 1, bias=False)
+        self.conv5 = nn.ConvTranspose2d(
+            channel_factor, self.channels, 4, 2, 1, bias=False)
         self.activ = Sigmoid()
         # out_shape: channels, 64, 64
 
@@ -135,8 +141,6 @@ class ResnetDecoder(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        # print('asdasasd', x.shape)
-        # x = x.view(x.size(0), 512, 7, 7)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu1(x)
