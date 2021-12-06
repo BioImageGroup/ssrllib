@@ -1,0 +1,100 @@
+seed_everything: 0
+
+data:
+  class_path: ssrllib.data.datamodules.ClassificationDataModule
+  init_args:
+    batch_size: 32
+    workers: 12
+    dataset_train:
+      class_path: &dataset_class_path ssrllib.data.datasets.AutoencodingROIDataset
+      init_args: &dataset_init_args
+        data_dir: &data_dir data/meso_root_folder
+        type: ndpi
+        size: &input_size 128
+        split:
+          - 0
+          - &perc_data 0.6
+        splitting: stratified
+    dataset_val:
+      class_path: *dataset_class_path
+      init_args:
+        <<: *dataset_init_args
+        split:
+          - 0.6
+          - 0.8
+    dataset_test:
+      class_path: *dataset_class_path
+      init_args:
+        <<: *dataset_init_args
+        split:
+          - 0.8
+          - 1
+
+model:
+  class_path: ssrllib.models.modules.TrainingModule
+  init_args:
+    backbone:
+      class_path: ssrllib.models.resnet.ResNet
+      init_args:
+        block: BasicBlock
+        layers:
+          - 2
+          - 2
+          - 2
+          - 2
+        global_avg_pool: False
+    head:
+      class_path: ssrllib.models.heads.ResnetDecoder
+      init_args:
+        latent_dim: 512
+    loss:
+      class_path: torch.nn.MSELoss
+    metric:
+      class_path: torchmetrics.MeanSquaredError
+    input_shape: [3, *input_size, *input_size]
+    jigsaw: False
+# ckpt_path: null
+
+trainer:
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        save_top_k: 1
+        verbose: True
+        monitor: val/metric
+        mode: min
+        every_n_epochs: 1
+    - class_path: pytorch_lightning.callbacks.EarlyStopping
+      init_args:
+        verbose: True
+        monitor: val/metric
+        min_delta: 0.0005
+        patience: 11
+        mode: min
+    - class_path: pytorch_lightning.callbacks.progress.TQDMProgressBar
+      init_args:
+        refresh_rate: 1
+    - class_path: pytorch_lightning.callbacks.LearningRateMonitor
+    - class_path: ssrllib.utils.callbacks.TelegramBotInterfacer
+      init_args:
+        token: 2103359853:AAFnlCyDqHsBdv_h2UESck8N5XLpIyj8-Ww
+        chat_ids: ["498118534"]
+        training_id:
+          dataset: *dataset_class_path
+          data_dir: *data_dir
+          perc_data: *perc_data
+  default_root_dir: logs/meso/pretext
+  max_epochs: &epochs 100
+  gpus: 1
+  strategy: dp
+  log_every_n_steps: 1
+  enable_progress_bar: True
+
+optimizer:
+  class_path: torch.optim.Adam
+  init_args:
+    lr: 1.0e-03
+lr_scheduler:
+  class_path: torch.optim.lr_scheduler.CosineAnnealingLR
+  init_args:
+    T_max: *epochs
