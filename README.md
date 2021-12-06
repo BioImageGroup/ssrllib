@@ -1,10 +1,8 @@
 # Self Supervised Representation Learning LIBrary
 
-This a small library for self-supervised training of neural networks. 
-The way it is intended to use it by creating a .yaml configuration file and passing it as a "--config" argument to the train.py script
+ssrllib is a pytorch-based package that implements self supervised learning techniques for image classification.
 
-For config examples see the "configs" directory
+## Training
+The training can be run with virtually no code. The library has been built on top of PytorchLightning, and makes use of LightningCLI to remove the typical boilerplate that comes with Deep Learning projects and experiments.
 
----
-
-Work in progress...
+The file `run_examples.sh` contains an example of commands used to launch training. While the `configs` folder contains a couple of examples of configuration files.
