@@ -368,21 +368,7 @@ class JigsawDataset(MultiFileStandardClassificationDataset):
         return image, label
 
 
-class MeTTADataset(MultiFileROIClassificationDataset):
-    def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted'):
-        super().__init__(data_dir, type, size, split, splitting)
-
-        self.transforms = [
-            Compose([RandomResizedCrop(size), RandomHorizontalFlip(
-                p=0.5), RandomVerticalFlip(p=0.5)]),
-            Compose([RandomResizedCrop(size), RandomHorizontalFlip(
-                p=0.5), RandomVerticalFlip(p=0.5)]),
-            Compose([RandomResizedCrop(size), RandomHorizontalFlip(
-                p=0.5), RandomVerticalFlip(p=0.5)]),
-        ]
-
-
-class MeTTAStandardDataset(MeTTADataset):
+class MeTTAStandardDataset(MultiFileClassificationDataset):
     def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted'):
         """This Dataset implements the Meat Test Time approach to generate mean embeddings at test time 
 
@@ -394,6 +380,15 @@ class MeTTAStandardDataset(MeTTADataset):
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
         super().__init__(data_dir, type, size, split, splitting)
+
+        self.transforms = [
+            Compose([ToTensor(), RandomResizedCrop(size), RandomHorizontalFlip(
+                p=0.5), RandomVerticalFlip(p=0.5)]),
+            Compose([ToTensor(), RandomResizedCrop(size), RandomHorizontalFlip(
+                p=0.5), RandomVerticalFlip(p=0.5)]),
+            Compose([ToTensor(), RandomResizedCrop(size), RandomHorizontalFlip(
+                p=0.5), RandomVerticalFlip(p=0.5)]),
+        ]
 
     def __getitem__(self, item):
         augmentations = []
@@ -406,7 +401,7 @@ class MeTTAStandardDataset(MeTTADataset):
         return augmentations, label
 
 
-class MeTTAROIDataset(MeTTADataset):
+class MeTTAROIDataset(MultiFileROIClassificationDataset):
     def __init__(self, data_dir: str, type: str, size: int, split: Tuple[float, float], splitting: str = 'sorted'):
         """This Dataset implements the Meat Test Time approach to generate mean embeddings at test time 
 
@@ -418,6 +413,15 @@ class MeTTAROIDataset(MeTTADataset):
             splitting (str, optional): Splitting approach to adopt. Defaults to 'sorted'.
         """
         super().__init__(data_dir, type, size, split, splitting)
+
+        self.transforms = [
+            Compose([RandomResizedCrop(size), RandomHorizontalFlip(
+                p=0.5), RandomVerticalFlip(p=0.5)]),
+            Compose([RandomResizedCrop(size), RandomHorizontalFlip(
+                p=0.5), RandomVerticalFlip(p=0.5)]),
+            Compose([RandomResizedCrop(size), RandomHorizontalFlip(
+                p=0.5), RandomVerticalFlip(p=0.5)]),
+        ]
 
     def __getitem__(self, item):
         augmentations = []

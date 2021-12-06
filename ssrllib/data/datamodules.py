@@ -56,16 +56,6 @@ class PredictionDataModule(pl.LightningDataModule):
         super().__init__()
 
         self.ds_pred = dataset_pred
-
-        # UNUSED
-        # This flag is needed for the Prediction LightningModule to know if it is going to get a single
-        # image or a list of test-time augmentations. Ideally this would be done on the LightnningModule
-        # side... TODO: Move this check to theb LightningModule side ssrrlib.models.modules.PrecictionModule
-        if isinstance(self.ds_pred, MeTTADataset):
-            self.metta = True
-        else:
-            self.metta = False
-
         self.batch_size = batch_size
         self.workers = workers
 
