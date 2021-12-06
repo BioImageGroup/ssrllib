@@ -145,7 +145,7 @@ class PredictionModule(BaseModule):
                  samplers: List[Tuple[str, SamplerMixin]],
                  param_grid: Dict[str, List[Union[int, float, str]]],
                  grid_search_params: Dict[str, Union[int, float, str]],
-                 ckpt_path: str,
+                 ckpt_path: str = None,
                  metta: bool = False):
         super().__init__()
 
@@ -164,7 +164,8 @@ class PredictionModule(BaseModule):
         self.pipeline = self._setup_pipeline()
         self.gscv = self._setup_gridsearch()
 
-        self.load_from_pretext(self.ckpt_path, drop_head=True, freeze_backbone=True)
+        if self.ckpt_path:
+            self.load_from_pretext(self.ckpt_path, drop_head=True, freeze_backbone=True)
 
     def _setup_pipeline(self):
         # pipeline = Pipeline(self.samplers + [('classifier', self.head)])
