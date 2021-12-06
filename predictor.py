@@ -40,6 +40,10 @@ if __name__ == "__main__":
         if train_size != 1:
             x_train, _, y_train, _ = train_test_split(
                 x, y, train_size=train_size, shuffle=True, random_state=0)
+        else:
+            x_train = x
+            y_train = y
+
         print_ts(f'train class distribution: {np.bincount(y_train)}')
 
         # fit the grid_search
